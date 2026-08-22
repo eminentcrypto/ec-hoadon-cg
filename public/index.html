@@ -493,7 +493,7 @@ select#inv_kyHanTraGop {
         background: linear-gradient(135deg, #0c4fb3, #2563eb);
         min-width: 220px;
         min-height: 48px;
-        padding: .65rem 1.15rem;
+        padding: .55rem 1.15rem;
         border-radius: 12px;
         box-shadow: 0 8px 20px rgba(37,99,235,.20);
         transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
@@ -993,8 +993,8 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
   box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 8px 18px rgba(0,0,0,.12);backdrop-filter:blur(12px)
 }
 .ecorp-status-icon{width:23px;height:23px;flex-basis:23px;border-radius:7px;font-size:.75rem}
-.ecorp-status strong{font-size:.65rem}
-.ecorp-status small{font-size:.55rem}
+.ecorp-status strong{font-size:.7rem}
+.ecorp-status small{font-size:.58rem}
 
 .main-container{
   width:min(1400px,100%);
@@ -1970,7 +1970,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
 
             <div class="info-grid">
 
-                <div class="section-header-blue">APPLICANT INFORMATION / THÔNG TIN HỌC VIÊN</div>
+                <div class="section-header-blue">APPLICANT INFORMATION / HỌC VIÊN</div>
 
                 <div class="info-label">Họ tên</div>
                 <input type="text" class="info-value" id="inv_hoTen" placeholder="">
@@ -2009,7 +2009,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
                 <div class="info-label">Ngày CK</div>
                 <input type="date" class="info-value" id="inv_ngayGD">
 
-                <div class="section-header-blue">ADMISSIONS INFORMATION / THÔNG TIN ĐĂNG KÝ</div>
+                <div class="section-header-blue">ACTUAL RECEIPTS / HỌC PHÍ</div>
 
                 <div class="info-label">Tổng HP đóng</div>
                 <input type="text" class="info-value" id="inv_tongHPDong" placeholder="" oninput="formatCurrencyInput(this)" onchange="calculatePaymentsAndText()">
@@ -3658,7 +3658,7 @@ function calculatePaymentsAndText() {
 
             <div class="reissue-invoice-note">
                 <span class="material-symbols-outlined">info</span>
-                <span>Chỉ hiển thị hóa đơn có trạng thái <b>Đã thu</b>, đúng số điện thoại và <b>đúng số tiền đang nhập</b>. Ngày CK không dùng để lọc; danh sách được sắp xếp mới nhất trước.</span>
+                <span>Chỉ hiển thị hóa đơn có trạng thái <b>Đã thu</b>, đúng số điện thoại và <b>đúng số tiền đang nhập</b>.</span>
             </div>
         </div>
         <div class="reissue-invoice-footer">
