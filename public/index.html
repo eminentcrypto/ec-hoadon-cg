@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ứng dụng Tra cứu & Hóa đơn X</title>
+    <title>Ứng dụng Tra cứu & Hóa đơn</title>
 <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Identity Services: dùng cho màn hình đăng nhập bằng tài khoản Google -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -993,8 +993,8 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
   box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 8px 18px rgba(0,0,0,.12);backdrop-filter:blur(12px)
 }
 .ecorp-status-icon{width:23px;height:23px;flex-basis:23px;border-radius:7px;font-size:.75rem}
-.ecorp-status strong{font-size:.65rem}
-.ecorp-status small{font-size:.55rem}
+.ecorp-status strong{font-size:.7rem}
+.ecorp-status small{font-size:.59rem}
 
 .main-container{
   width:min(1400px,100%);
@@ -1975,7 +1975,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
 
             <div class="info-grid">
 
-                <div class="section-header-blue">APPLICANT INFORMATION / THÔNG TIN HỌC VIÊN</div>
+                <div class="section-header-blue">APPLICANT INFORMATION / HỌC VIÊN</div>
 
                 <div class="info-label">Họ tên</div>
                 <input type="text" class="info-value" id="inv_hoTen" placeholder="">
@@ -2034,7 +2034,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
                 <div class="info-label">Ngày CK</div>
                 <input type="date" class="info-value" id="inv_ngayGD">
 
-                <div class="section-header-blue">ADMISSIONS INFORMATION / THÔNG TIN ĐĂNG KÝ</div>
+                <div class="section-header-blue">ACTUAL RECEIPTS / HỌC PHÍ</div>
 
                 <div class="info-label">Tổng HP đóng</div>
                 <input type="text" class="info-value" id="inv_tongHPDong" placeholder="" oninput="formatCurrencyInput(this)" onchange="calculatePaymentsAndText()">
@@ -2192,7 +2192,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
         if (checkStatusReset) checkStatusReset.textContent = '';
         const pdfBtnReset = document.getElementById('taoPdfSaoKeBtn');
         const pdfResultReset = document.getElementById('pdfSaoKeResult');
-        if (pdfBtnReset) { pdfBtnReset.classList.add('hidden'); pdfBtnReset.disabled = false; pdfBtnReset.textContent = 'TẠO PDF SAO KÊ'; }
+        if (pdfBtnReset) { pdfBtnReset.classList.add('hidden'); pdfBtnReset.disabled = false; pdfBtnReset.textContent = 'TẠO PDF HÓA ĐƠN'; }
         if (pdfResultReset) { pdfResultReset.classList.add('hidden'); pdfResultReset.innerHTML = ''; pdfResultReset.classList.remove('error'); }
 
         // Xóa QR cũ để QR luôn khớp với hóa đơn đang thao tác.
@@ -2883,7 +2883,7 @@ function calculatePaymentsAndText() {
                         lastMatchedInvoiceRow = null;
                         const pdfBtnNew = document.getElementById('taoPdfSaoKeBtn');
                         const pdfResultNew = document.getElementById('pdfSaoKeResult');
-                        if (pdfBtnNew) { pdfBtnNew.classList.add('hidden'); pdfBtnNew.disabled = false; pdfBtnNew.textContent = 'TẠO PDF SAO KÊ'; }
+                        if (pdfBtnNew) { pdfBtnNew.classList.add('hidden'); pdfBtnNew.disabled = false; pdfBtnNew.textContent = 'TẠO PDF HÓA ĐƠN'; }
                         if (pdfResultNew) { pdfResultNew.classList.add('hidden'); pdfResultNew.innerHTML = ''; pdfResultNew.classList.remove('error'); }
                         messageArea.classList.add('hidden');
                         showInvoiceSuccessModal(result.id);
@@ -3122,10 +3122,10 @@ function calculatePaymentsAndText() {
     messageArea.style.backgroundColor = '#dcfce7';
     messageArea.style.color = '#166534';
 
-    // Tự ẩn sau 3 giây
+    // Tự ẩn sau 4 giây
     setTimeout(function () {
         messageArea.classList.add('hidden');
-    }, 3000);
+    }, 4000);
 }
                 } else {
                     throw new Error((result && (result.error || result.message)) || 'Không thể gửi cập nhật.');
@@ -3248,21 +3248,27 @@ function calculatePaymentsAndText() {
 }
 
     function showInvoiceMessage(message, type) {
-        const el = document.getElementById('invoiceMessage');
-        if (!el) return;
-        el.textContent = message;
-        el.classList.remove('hidden');
-        if (type === 'error') {
-            el.style.backgroundColor = '#f8d7da';
-            el.style.color = '#721c24';
-        } else if (type === 'success') {
-            el.style.backgroundColor = '#d4edda';
-            el.style.color = '#155724';
-        } else {
-            el.style.backgroundColor = '#d1ecf1';
-            el.style.color = '#0c5460';
-        }
+    const el = document.getElementById('invoiceMessage');
+    if (!el) return;
+
+    el.textContent = message;
+    el.classList.remove('hidden');
+
+    if (type === 'error') {
+        el.style.backgroundColor = '#f8d7da';
+        el.style.color = '#721c24';
+    } else if (type === 'success') {
+        el.style.backgroundColor = '#d4edda';
+        el.style.color = '#155724';
+    } else {
+        el.style.backgroundColor = '#d1ecf1';
+        el.style.color = '#0c5460';
     }
+
+    setTimeout(function () {
+        el.classList.add('hidden');
+    }, 4000);
+}
 
     function generatePaymentQRCode() {
         const qrSection = document.getElementById('paymentOutputSection');
@@ -3462,7 +3468,7 @@ function calculatePaymentsAndText() {
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
 
-        // Check thành công -> hiện nút TẠO PDF SAO KÊ ở khung chính (không phải trong popup).
+        // Check thành công -> hiện nút TẠO PDF HÓA ĐƠN ở khung chính (không phải trong popup).
         const pdfBtn = document.getElementById('taoPdfSaoKeBtn');
         const pdfResult = document.getElementById('pdfSaoKeResult');
         if (ok) {
@@ -3470,7 +3476,7 @@ function calculatePaymentsAndText() {
             if (pdfBtn && lastMatchedInvoiceRow) {
                 pdfBtn.classList.remove('hidden');
                 pdfBtn.disabled = false;
-                pdfBtn.textContent = 'TẠO PDF SAO KÊ';
+                pdfBtn.textContent = 'TẠO PDF HÓA ĐƠN';
             }
             if (pdfResult) { pdfResult.classList.add('hidden'); pdfResult.innerHTML = ''; pdfResult.classList.remove('error'); }
         } else {
@@ -3553,7 +3559,7 @@ function calculatePaymentsAndText() {
                 sessionToken: getEcorpSessionToken()
             })
             .then(function (result) {
-                if (btn) { btn.disabled = false; btn.textContent = 'TẠO PDF SAO KÊ'; }
+                if (btn) { btn.disabled = false; btn.textContent = 'TẠO PDF HÓA ĐƠN'; }
                 if (!resultBox) return;
                 if (result && result.status === 'SUCCESS' && result.pdfUrl) {
                     resultBox.classList.remove('error');
@@ -3566,7 +3572,7 @@ function calculatePaymentsAndText() {
                 }
             })
             .catch(function (error) {
-                if (btn) { btn.disabled = false; btn.textContent = 'TẠO PDF SAO KÊ'; }
+                if (btn) { btn.disabled = false; btn.textContent = 'TẠO PDF HÓA ĐƠN'; }
                 if (resultBox) {
                     resultBox.classList.add('error');
                     resultBox.classList.remove('hidden');
@@ -3687,7 +3693,7 @@ function calculatePaymentsAndText() {
 
             <div class="reissue-invoice-note">
                 <span class="material-symbols-outlined">info</span>
-                <span>Chỉ hiển thị hóa đơn có trạng thái <b>Đã thu</b>, đúng số điện thoại và <b>đúng số tiền đang nhập</b>. Ngày CK không dùng để lọc; danh sách được sắp xếp mới nhất trước.</span>
+                <span>Chỉ hiển thị hóa đơn có trạng thái <b>Đã thu</b>, đúng số điện thoại và <b>đúng số tiền đang nhập</b>.</span>
             </div>
         </div>
         <div class="reissue-invoice-footer">
