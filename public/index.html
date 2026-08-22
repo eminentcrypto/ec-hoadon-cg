@@ -9,7 +9,7 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
         // Thư viện GIS gọi lại hàm này ngay khi tải xong (dù script có async/defer).
-        // Đặt cờ sẵn để đoạn script khởi tạo đăng nhập (nằm dưới body) biết lúc nào bắt đầu.
+        
         window.onGoogleLibraryLoad = function () {
             window.__ecorpGisReady = true;
             if (typeof window.__ecorpInitAuthWhenReady === 'function') {
