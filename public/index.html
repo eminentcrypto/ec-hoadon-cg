@@ -993,8 +993,8 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
   box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 8px 18px rgba(0,0,0,.12);backdrop-filter:blur(12px)
 }
 .ecorp-status-icon{width:23px;height:23px;flex-basis:23px;border-radius:7px;font-size:.75rem}
-.ecorp-status strong{font-size:.7rem}
-.ecorp-status small{font-size:.59rem}
+.ecorp-status strong{font-size:.65rem}
+.ecorp-status small{font-size:.55rem}
 
 .main-container{
   width:min(1400px,100%);
@@ -1803,11 +1803,6 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
             var nguoiXuatEl = document.getElementById('inv_nguoiXuatHD');
             if (nguoiXuatEl) nguoiXuatEl.value = (session.maNV || '') + ' - ' + (session.hoTen || '');
 
-            var chucVu = session.chucVu || '';
-            var qlSelect = document.getElementById('inv_qlXuatHD');
-            var ltSelect = document.getElementById('inv_leTanXuatHD');
-            if (qlSelect) qlSelect.disabled = (chucVu !== 'Quản lý KD');
-            if (ltSelect) ltSelect.disabled = (chucVu !== 'Lễ tân');
         }
 
         function showEcorpLoginError(message) {
@@ -1955,7 +1950,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
                             <div id="invoiceCheckStatus" class="invoice-check-status"></div>
 							<div id="pdfSaoKeResult" class="pdf-sao-ke-result hidden"></div>
                             <button type="button" id="checkSaoKeBtn" class="send-invoice-link-btn" onclick="checkSaoKe()" disabled>CHECK SAO KÊ</button>
-                            <button type="button" id="taoPdfSaoKeBtn" class="send-invoice-link-btn hidden" onclick="taoPdfSaoKe()">XUẤT PDF HÓA ĐƠN</button>
+                            <button type="button" id="taoPdfSaoKeBtn" class="send-invoice-link-btn" onclick="taoPdfSaoKe()">XUẤT PDF HÓA ĐƠN</button>
                         </div>
                     </div>
                 </div>
@@ -1975,7 +1970,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
 
             <div class="info-grid">
 
-                <div class="section-header-blue">APPLICANT INFORMATION / HỌC VIÊN</div>
+                <div class="section-header-blue">APPLICANT INFORMATION / THÔNG TIN HỌC VIÊN</div>
 
                 <div class="info-label">Họ tên</div>
                 <input type="text" class="info-value" id="inv_hoTen" placeholder="">
@@ -1994,39 +1989,19 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
                 </select>
 
                 <div class="info-label">Phân loại</div>
-                <input type="text" class="info-value" id="inv_phanLoai" readonly value="Cơ sở" placeholder="">
+                <select class="info-value" id="inv_phanLoai">
+                    <option value="Cơ sở">Cơ sở</option>
+                    <option value="TG">TG</option>
+                    <option value="Hóa đơn cũ">Hóa đơn cũ</option>
+                    <option value="T">T</option>
+                    <option value="TE">TE</option>
+                    <option value="Chuyển dưới 100k">Chuyển dưới 100k</option>
+                    <option value="VCB">VCB</option>
+                    <option value="CK nội dung khác">CK nội dung khác</option>
+                    <option value="TGT">TGT</option>
+                </select>
                 <div class="info-label">Ghi chú</div>
                 <input type="text" class="info-value" id="inv_ghiChu" placeholder="">
-
-                <div class="info-label">QL xuất HĐ</div>
-<select class="info-value" id="inv_qlXuatHD" disabled
-        onchange="handleMutuallyExclusive('inv_qlXuatHD', 'inv_leTanXuatHD')">
-    <option value="">Chọn</option>
-    <option value="Cơ sở">Cơ sở</option>
-    <option value="TG">TG</option>
-    <option value="Hóa đơn cũ">Hóa đơn cũ</option>
-    <option value="T">T</option>
-    <option value="TE">TE</option>
-    <option value="Chuyển dưới 100k">Chuyển dưới 100k</option>
-    <option value="VCB">VCB</option>
-    <option value="CK nội dung khác">CK nội dung khác</option>
-    <option value="TGT">TGT</option>
-</select>
-
-<div class="info-label">LT xuất HĐ</div>
-<select class="info-value" id="inv_leTanXuatHD" disabled
-        onchange="handleMutuallyExclusive('inv_leTanXuatHD', 'inv_qlXuatHD')">
-    <option value="">Chọn</option>
-    <option value="Cơ sở">Cơ sở</option>
-    <option value="TG">TG</option>
-    <option value="Hóa đơn cũ">Hóa đơn cũ</option>
-    <option value="T">T</option>
-    <option value="TE">TE</option>
-    <option value="Chuyển dưới 100k">Chuyển dưới 100k</option>
-    <option value="VCB">VCB</option>
-    <option value="CK nội dung khác">CK nội dung khác</option>
-    <option value="TGT">TGT</option>
-</select>
 
                 <div class="info-label">Người xuất HĐ</div>
                 <input type="text" class="info-value" id="inv_nguoiXuatHD" value="" readonly placeholder="">
@@ -2034,7 +2009,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
                 <div class="info-label">Ngày CK</div>
                 <input type="date" class="info-value" id="inv_ngayGD">
 
-                <div class="section-header-blue">ACTUAL RECEIPTS / HỌC PHÍ</div>
+                <div class="section-header-blue">ADMISSIONS INFORMATION / THÔNG TIN ĐĂNG KÝ</div>
 
                 <div class="info-label">Tổng HP đóng</div>
                 <input type="text" class="info-value" id="inv_tongHPDong" placeholder="" oninput="formatCurrencyInput(this)" onchange="calculatePaymentsAndText()">
@@ -2158,8 +2133,6 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
         document.getElementById('inv_phanLoai').value = 'Cơ sở';
         document.getElementById('inv_ghiChu').value = '';
 
-        document.getElementById('inv_qlXuatHD').selectedIndex = 0;
-        document.getElementById('inv_leTanXuatHD').selectedIndex = 0;
         document.getElementById('inv_phanLoai').value = 'Cơ sở';
         const sessionUser = window.ecorpSession;
         document.getElementById('inv_nguoiXuatHD').value = sessionUser
@@ -2192,7 +2165,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
         if (checkStatusReset) checkStatusReset.textContent = '';
         const pdfBtnReset = document.getElementById('taoPdfSaoKeBtn');
         const pdfResultReset = document.getElementById('pdfSaoKeResult');
-        if (pdfBtnReset) { pdfBtnReset.classList.add('hidden'); pdfBtnReset.disabled = false; pdfBtnReset.textContent = 'TẠO PDF HÓA ĐƠN'; }
+        if (pdfBtnReset) { pdfBtnReset.classList.remove('hidden'); pdfBtnReset.disabled = false; pdfBtnReset.textContent = 'XUẤT PDF HÓA ĐƠN'; }
         if (pdfResultReset) { pdfResultReset.classList.add('hidden'); pdfResultReset.innerHTML = ''; pdfResultReset.classList.remove('error'); }
 
         // Xóa QR cũ để QR luôn khớp với hóa đơn đang thao tác.
@@ -2214,26 +2187,6 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
         }
         if (qrLoading) qrLoading.classList.add('hidden');
         if (qrEmptyState) qrEmptyState.classList.remove('hidden');
-    }
-
-    // Hàm xử lý trường loại trừ nhau (QL và Lễ tân)
-    function handleMutuallyExclusive(changedId, otherId) {
-        const changedSelect = document.getElementById(changedId);
-        const otherSelect = document.getElementById(otherId);
-        const phanLoaiInput = document.getElementById('inv_phanLoai');
-
-        if (!changedSelect || !otherSelect || !phanLoaiInput) return;
-
-        if (changedSelect.value !== '') {
-            // QL/LT chọn phương án nào thì Phân loại lấy đúng phương án đó.
-            otherSelect.selectedIndex = 0;
-            phanLoaiInput.value = changedSelect.value;
-        } else if (otherSelect.value !== '') {
-            phanLoaiInput.value = otherSelect.value;
-        } else {
-            // Mặc định luôn là Cơ sở nếu cả hai chưa chọn.
-            phanLoaiInput.value = 'Cơ sở';
-        }
     }
 
     // Hàm chính tính toán HP 1-10 và Bằng chữ
@@ -2841,8 +2794,6 @@ function calculatePaymentsAndText() {
             coSoThu: document.getElementById('inv_coSo').value.trim(),
             hopDong: document.getElementById('inv_hopDong').value,
             ghiChu: document.getElementById('inv_ghiChu').value.trim(),
-            qlXuatHD: document.getElementById('inv_qlXuatHD').value,
-            leTanXuatHD: document.getElementById('inv_leTanXuatHD').value,
             ngayGD: (document.getElementById('inv_ngayGD') || {}).value || new Date().toISOString().slice(0, 10),
             nguoiXuatHD: document.getElementById('inv_nguoiXuatHD').value.trim(),
             sessionToken: getEcorpSessionToken(),
@@ -2878,13 +2829,29 @@ function calculatePaymentsAndText() {
                         };
                         const checkBtn = document.getElementById('checkSaoKeBtn');
                         const checkStatus = document.getElementById('invoiceCheckStatus');
-                        if (checkBtn) checkBtn.disabled = !lastInvoiceRowId;
-                        if (checkStatus) checkStatus.textContent = 'Hóa đơn đã lưu. Có thể CHECK SAO KÊ.';
-                        lastMatchedInvoiceRow = null;
                         const pdfBtnNew = document.getElementById('taoPdfSaoKeBtn');
                         const pdfResultNew = document.getElementById('pdfSaoKeResult');
-                        if (pdfBtnNew) { pdfBtnNew.classList.add('hidden'); pdfBtnNew.disabled = false; pdfBtnNew.textContent = 'TẠO PDF HÓA ĐƠN'; }
+                        const paymentOutput = document.getElementById('paymentOutputSection');
+
+                        // Khu vực PDF luôn có sẵn ngay sau khi NỘP HÓA ĐƠN.
+                        if (paymentOutput) paymentOutput.classList.remove('hidden');
+                        if (pdfBtnNew) { pdfBtnNew.classList.remove('hidden'); pdfBtnNew.disabled = false; pdfBtnNew.textContent = 'XUẤT PDF HÓA ĐƠN'; }
                         if (pdfResultNew) { pdfResultNew.classList.add('hidden'); pdfResultNew.innerHTML = ''; pdfResultNew.classList.remove('error'); }
+                        lastMatchedInvoiceRow = null;
+
+                        const isCoSo = String(formData.phanLoai || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() === 'CO SO';
+                        if (checkBtn) checkBtn.disabled = !lastInvoiceRowId || !isCoSo;
+                        if (checkStatus) {
+                            if (isCoSo) {
+                                checkStatus.textContent = 'Hóa đơn đã lưu. Có thể CHECK SAO KÊ.';
+                            } else if (result.requiresApproval) {
+                                checkStatus.textContent = 'Đang chờ Quản lý/Lễ tân duyệt. Sau khi được duyệt, chỉ cần XUẤT PDF.';
+                            } else if (result.alreadyPaid) {
+                                checkStatus.textContent = '✓ Hóa đơn đã Đã thu. Có thể XUẤT PDF.';
+                            } else {
+                                checkStatus.textContent = 'Phân loại này không cần CHECK SAO KÊ.';
+                            }
+                        }
                         messageArea.classList.add('hidden');
                         showInvoiceSuccessModal(result.id);
                     } else {
@@ -3122,10 +3089,10 @@ function calculatePaymentsAndText() {
     messageArea.style.backgroundColor = '#dcfce7';
     messageArea.style.color = '#166534';
 
-    // Tự ẩn sau 4 giây
+    // Tự ẩn sau 3 giây
     setTimeout(function () {
         messageArea.classList.add('hidden');
-    }, 4000);
+    }, 3000);
 }
                 } else {
                     throw new Error((result && (result.error || result.message)) || 'Không thể gửi cập nhật.');
@@ -3247,28 +3214,28 @@ function calculatePaymentsAndText() {
     return withoutLeadingZero.slice(0, 5);
 }
 
+    let invoiceMessageTimer = null;
+
     function showInvoiceMessage(message, type) {
-    const el = document.getElementById('invoiceMessage');
-    if (!el) return;
-
-    el.textContent = message;
-    el.classList.remove('hidden');
-
-    if (type === 'error') {
-        el.style.backgroundColor = '#f8d7da';
-        el.style.color = '#721c24';
-    } else if (type === 'success') {
-        el.style.backgroundColor = '#d4edda';
-        el.style.color = '#155724';
-    } else {
-        el.style.backgroundColor = '#d1ecf1';
-        el.style.color = '#0c5460';
+        const el = document.getElementById('invoiceMessage');
+        if (!el) return;
+        clearTimeout(invoiceMessageTimer);
+        el.textContent = message;
+        el.classList.remove('hidden');
+        if (type === 'error') {
+            el.style.backgroundColor = '#f8d7da';
+            el.style.color = '#721c24';
+        } else if (type === 'success') {
+            el.style.backgroundColor = '#d4edda';
+            el.style.color = '#155724';
+        } else {
+            el.style.backgroundColor = '#d1ecf1';
+            el.style.color = '#0c5460';
+        }
+        invoiceMessageTimer = setTimeout(function () {
+            el.classList.add('hidden');
+        }, 3000);
     }
-
-    setTimeout(function () {
-        el.classList.add('hidden');
-    }, 4000);
-}
 
     function generatePaymentQRCode() {
         const qrSection = document.getElementById('paymentOutputSection');
@@ -3468,22 +3435,19 @@ function calculatePaymentsAndText() {
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
 
-        // Check thành công -> hiện nút TẠO PDF HÓA ĐƠN ở khung chính (không phải trong popup).
+        // Nút XUẤT PDF luôn hiển thị. Check sao kê chỉ cập nhật row đã khớp;
+        // việc có được xuất hay không sẽ do backend kiểm tra trạng thái A tại thời điểm bấm.
         const pdfBtn = document.getElementById('taoPdfSaoKeBtn');
         const pdfResult = document.getElementById('pdfSaoKeResult');
         if (ok) {
             lastMatchedInvoiceRow = Number(result && result.row) || (lastInvoiceCheckSnapshot && lastInvoiceCheckSnapshot.rowId) || null;
-            if (pdfBtn && lastMatchedInvoiceRow) {
-                pdfBtn.classList.remove('hidden');
-                pdfBtn.disabled = false;
-                pdfBtn.textContent = 'TẠO PDF HÓA ĐƠN';
-            }
-            if (pdfResult) { pdfResult.classList.add('hidden'); pdfResult.innerHTML = ''; pdfResult.classList.remove('error'); }
-        } else {
-            lastMatchedInvoiceRow = null;
-            if (pdfBtn) pdfBtn.classList.add('hidden');
-            if (pdfResult) { pdfResult.classList.add('hidden'); pdfResult.innerHTML = ''; pdfResult.classList.remove('error'); }
         }
+        if (pdfBtn) {
+            pdfBtn.classList.remove('hidden');
+            pdfBtn.disabled = false;
+            pdfBtn.textContent = 'XUẤT PDF HÓA ĐƠN';
+        }
+        if (pdfResult) { pdfResult.classList.add('hidden'); pdfResult.innerHTML = ''; pdfResult.classList.remove('error'); }
     }
 
     function closeInvoiceCheckModal() {
@@ -3539,12 +3503,13 @@ function calculatePaymentsAndText() {
     }
 
     function taoPdfSaoKe() {
-        if (!lastMatchedInvoiceRow) {
+        const rowId = Number(lastInvoiceRowId || lastMatchedInvoiceRow) || 0;
+        if (!rowId) {
             const pdfResultErr = document.getElementById('pdfSaoKeResult');
             if (pdfResultErr) {
                 pdfResultErr.classList.remove('hidden');
                 pdfResultErr.classList.add('error');
-                pdfResultErr.textContent = 'Chưa xác định được hóa đơn. Vui lòng CHECK SAO KÊ thành công trước.';
+                pdfResultErr.textContent = 'Chưa xác định được hóa đơn. Vui lòng NỘP HÓA ĐƠN trước.';
             }
             return;
         }
@@ -3559,7 +3524,7 @@ function calculatePaymentsAndText() {
                 sessionToken: getEcorpSessionToken()
             })
             .then(function (result) {
-                if (btn) { btn.disabled = false; btn.textContent = 'TẠO PDF HÓA ĐƠN'; }
+                if (btn) { btn.disabled = false; btn.textContent = 'XUẤT PDF HÓA ĐƠN'; }
                 if (!resultBox) return;
                 if (result && result.status === 'SUCCESS' && result.pdfUrl) {
                     resultBox.classList.remove('error');
@@ -3572,7 +3537,7 @@ function calculatePaymentsAndText() {
                 }
             })
             .catch(function (error) {
-                if (btn) { btn.disabled = false; btn.textContent = 'TẠO PDF HÓA ĐƠN'; }
+                if (btn) { btn.disabled = false; btn.textContent = 'XUẤT PDF HÓA ĐƠN'; }
                 if (resultBox) {
                     resultBox.classList.add('error');
                     resultBox.classList.remove('hidden');
@@ -3693,7 +3658,7 @@ function calculatePaymentsAndText() {
 
             <div class="reissue-invoice-note">
                 <span class="material-symbols-outlined">info</span>
-                <span>Chỉ hiển thị hóa đơn có trạng thái <b>Đã thu</b>, đúng số điện thoại và <b>đúng số tiền đang nhập</b>.</span>
+                <span>Chỉ hiển thị hóa đơn có trạng thái <b>Đã thu</b>, đúng số điện thoại và <b>đúng số tiền đang nhập</b>. Ngày CK không dùng để lọc; danh sách được sắp xếp mới nhất trước.</span>
             </div>
         </div>
         <div class="reissue-invoice-footer">
