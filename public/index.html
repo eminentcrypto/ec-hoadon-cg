@@ -2847,9 +2847,9 @@ function calculatePaymentsAndText() {
                             } else if (result.requiresApproval) {
                                 checkStatus.textContent = 'Đang chờ Quản lý/Lễ tân duyệt. Sau khi được duyệt, chỉ cần XUẤT PDF.';
                             } else if (result.alreadyPaid) {
-                                checkStatus.textContent = '✓ Hóa đơn đã Đã thu. Có thể XUẤT PDF.';
+                                checkStatus.textContent = '✓ Hóa đơn đã được duyệt. Có thể XUẤT PDF.';
                             } else {
-                                checkStatus.textContent = 'Phân loại này không cần CHECK SAO KÊ.';
+                                checkStatus.textContent = 'Hóa đơn đã được duyệt, có thể xuất PDF.';
                             }
                         }
                         messageArea.classList.add('hidden');
