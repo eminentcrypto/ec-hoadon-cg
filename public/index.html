@@ -1671,6 +1671,31 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
     .reissue-search-amount{justify-self:start}
 }
 </style>
+
+    <!-- ECORP favicon / app icons -->
+    <link rel="icon" type="image/png" href="https://ecorp.edu.vn/wp-content/uploads/fav40-ecorp.png">
+    <link rel="shortcut icon" type="image/png" href="https://ecorp.edu.vn/wp-content/uploads/fav40-ecorp.png">
+    <link rel="apple-touch-icon" href="https://ecorp.edu.vn/wp-content/uploads/Logo-Ecorp-doc-trang-nen-xanh-vuong-1.png">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0C4FB3">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ECORP Hóa đơn">
+
+
+<style id="responsive-phone-label">
+.phone-label-mobile { display: none; }
+
+@media (max-width: 640px) {
+    .phone-label-desktop { display: none !important; }
+    .phone-label-mobile {
+        display: inline !important;
+        white-space: nowrap;
+    }
+}
+</style>
+
 </head>
 <body class="ecorp-auth-pending">
 
@@ -1863,7 +1888,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
 
             <div id="lookupBody">
             <div class="search-area">
-                <label for="phoneNumber">Số điện thoại:</label>
+                <label for="phoneNumber"><span class="phone-label-desktop">Số điện thoại:</span><span class="phone-label-mobile">Số ĐT:</span></label>
                 <input type="text" id="phoneNumber" placeholder="" maxlength="15">
                 <button id="searchBtn" class="icon-action-btn icon-action-primary" type="button" title="Tìm kiếm" aria-label="Tìm kiếm">
                     <span class="material-symbols-outlined">search_check_2</span>
@@ -1995,7 +2020,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
                     <option value="Hóa đơn cũ">Hóa đơn cũ</option>
                     <option value="T">T</option>
                     <option value="TE">TE</option>
-                    <option value="GLOW">GLOW</option>
+                    <option value="Chuyển dưới 100k">Chuyển dưới 100k</option>
                     <option value="VCB">VCB</option>
                     <option value="CK nội dung khác">CK nội dung khác</option>
                     <option value="TGT">TGT</option>
@@ -2809,7 +2834,7 @@ function calculatePaymentsAndText() {
         isSubmittingInvoice = true;
         submitBtn.disabled = true;
         submitBtn.textContent = 'Đang nộp...';
-        showInvoiceMessage('Đang gửi hóa đơn lên hệ thống...', 'info');
+        showInvoiceMessage('Đang lưu hóa đơn...', 'info');
 
         try {
             ecorpApi('saveInvoice', formData)
@@ -2833,22 +2858,17 @@ function calculatePaymentsAndText() {
                         const pdfResultNew = document.getElementById('pdfSaoKeResult');
                         const paymentOutput = document.getElementById('paymentOutputSection');
 
-                        // Xác định Phân loại TRƯỚC khi dùng biến isCoSo.
                         const isCoSo = String(formData.phanLoai || '')
                             .trim()
                             .normalize('NFD')
-                            .replace(/[̀-ͯ]/g, '')
+                            .replace(/[\u0300-\u036f]/g, '')
                             .toUpperCase() === 'CO SO';
 
-                        // Sau khi NỘP HÓA ĐƠN:
-                        // - Cơ sở: hiện "THANH TOÁN & HÓA ĐƠN" ngay để CHECK SAO KÊ.
-                        // - Khác Cơ sở: ẨN NGAY. Chỉ generatePaymentQRCode() mới mở lại.
+                        // Sau khi GỬI HÓA ĐƠN: luôn giữ vùng "Thanh toán & Hóa đơn" ẨN.
+                        // Vùng này chỉ được mở bởi generatePaymentQRCode() khi người dùng bấm XUẤT QR CODE.
                         if (paymentOutput) paymentOutput.classList.add('hidden');
-                        if (isCoSo && paymentOutput) paymentOutput.classList.remove('hidden');
-
-                        // PDF chỉ được hiển thị khi khu vực Thanh toán & Hóa đơn được mở.
                         if (pdfBtnNew) {
-                            pdfBtnNew.classList.remove('hidden');
+                            pdfBtnNew.classList.add('hidden');
                             pdfBtnNew.disabled = false;
                             pdfBtnNew.textContent = 'XUẤT PDF HÓA ĐƠN';
                         }
@@ -2858,8 +2878,6 @@ function calculatePaymentsAndText() {
                             pdfResultNew.classList.remove('error');
                         }
                         lastMatchedInvoiceRow = null;
-
-                        const isCoSo = String(formData.phanLoai || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() === 'CO SO';
                         if (checkBtn) checkBtn.disabled = !lastInvoiceRowId || !isCoSo;
                         if (checkStatus) {
                             if (isCoSo) {
@@ -3316,6 +3334,28 @@ function calculatePaymentsAndText() {
 
         if (paymentOutputSectionForQR) {
             paymentOutputSectionForQR.classList.remove('hidden');
+        }
+
+        // Với Phân loại KHÁC "Cơ sở": không cần CHECK SAO KÊ (nút này đã bị
+        // disabled/mờ ngay từ lúc NỘP HÓA ĐƠN), nhưng nút XUẤT PDF HÓA ĐƠN
+        // vẫn phải hiện ra ngay khi bấm XUẤT QR CODE để nhân viên có chỗ bấm
+        // sau khi được Quản lý/Lễ tân duyệt. Backend taoPdfSaoKe() sẽ tự chặn
+        // nếu hóa đơn chưa ở trạng thái "Đã thu" và cho xuất PDF nếu đã duyệt.
+        // (Với "Cơ sở" thì giữ nguyên hành vi cũ: nút PDF chỉ hiện sau khi
+        // CHECK SAO KÊ khớp, xử lý trong openInvoiceCheckModal().)
+        const phanLoaiSelectForQR = document.getElementById('inv_phanLoai');
+        const isCoSoForQR = String(phanLoaiSelectForQR ? phanLoaiSelectForQR.value : '')
+            .trim()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toUpperCase() === 'CO SO';
+        if (!isCoSoForQR) {
+            const pdfBtnForQR = document.getElementById('taoPdfSaoKeBtn');
+            if (pdfBtnForQR) {
+                pdfBtnForQR.classList.remove('hidden');
+                pdfBtnForQR.disabled = false;
+                pdfBtnForQR.textContent = 'XUẤT PDF HÓA ĐƠN';
+            }
         }
 
         const firstFive = getFirstFivePhoneDigits(sdt);
@@ -3856,6 +3896,17 @@ function calculatePaymentsAndText() {
         if (e.key === 'Escape') closeModal();
     });
 })();
+</script>
+
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function (err) {
+      console.warn('ECORP Service Worker registration failed:', err);
+    });
+  });
+}
 </script>
 
 </body>
