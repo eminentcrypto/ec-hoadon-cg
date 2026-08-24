@@ -3336,6 +3336,28 @@ function calculatePaymentsAndText() {
             paymentOutputSectionForQR.classList.remove('hidden');
         }
 
+        // Với Phân loại KHÁC "Cơ sở": không cần CHECK SAO KÊ (nút này đã bị
+        // disabled/mờ ngay từ lúc NỘP HÓA ĐƠN), nhưng nút XUẤT PDF HÓA ĐƠN
+        // vẫn phải hiện ra ngay khi bấm XUẤT QR CODE để nhân viên có chỗ bấm
+        // sau khi được Quản lý/Lễ tân duyệt. Backend taoPdfSaoKe() sẽ tự chặn
+        // nếu hóa đơn chưa ở trạng thái "Đã thu" và cho xuất PDF nếu đã duyệt.
+        // (Với "Cơ sở" thì giữ nguyên hành vi cũ: nút PDF chỉ hiện sau khi
+        // CHECK SAO KÊ khớp, xử lý trong openInvoiceCheckModal().)
+        const phanLoaiSelectForQR = document.getElementById('inv_phanLoai');
+        const isCoSoForQR = String(phanLoaiSelectForQR ? phanLoaiSelectForQR.value : '')
+            .trim()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toUpperCase() === 'CO SO';
+        if (!isCoSoForQR) {
+            const pdfBtnForQR = document.getElementById('taoPdfSaoKeBtn');
+            if (pdfBtnForQR) {
+                pdfBtnForQR.classList.remove('hidden');
+                pdfBtnForQR.disabled = false;
+                pdfBtnForQR.textContent = 'XUẤT PDF HÓA ĐƠN';
+            }
+        }
+
         const firstFive = getFirstFivePhoneDigits(sdt);
         const hoTenKhongDau = removeVietnameseTones(hoTen).replace(/\s+/g, ' ').trim();
         const addInfo = firstFive + hoTenKhongDau;
