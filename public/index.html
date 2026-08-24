@@ -1671,6 +1671,31 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
     .reissue-search-amount{justify-self:start}
 }
 </style>
+
+    <!-- ECORP favicon / app icons -->
+    <link rel="icon" type="image/png" href="https://ecorp.edu.vn/wp-content/uploads/fav40-ecorp.png">
+    <link rel="shortcut icon" type="image/png" href="https://ecorp.edu.vn/wp-content/uploads/fav40-ecorp.png">
+    <link rel="apple-touch-icon" href="https://ecorp.edu.vn/wp-content/uploads/Logo-Ecorp-doc-trang-nen-xanh-vuong-1.png">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0C4FB3">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ECORP Hóa đơn">
+
+
+<style id="responsive-phone-label">
+.phone-label-mobile { display: none; }
+
+@media (max-width: 640px) {
+    .phone-label-desktop { display: none !important; }
+    .phone-label-mobile {
+        display: inline !important;
+        white-space: nowrap;
+    }
+}
+</style>
+
 </head>
 <body class="ecorp-auth-pending">
 
@@ -1863,7 +1888,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
 
             <div id="lookupBody">
             <div class="search-area">
-                <label for="phoneNumber">Số điện thoại:</label>
+                <label for="phoneNumber"><span class="phone-label-desktop">Số điện thoại:</span><span class="phone-label-mobile">Số ĐT:</span></label>
                 <input type="text" id="phoneNumber" placeholder="" maxlength="15">
                 <button id="searchBtn" class="icon-action-btn icon-action-primary" type="button" title="Tìm kiếm" aria-label="Tìm kiếm">
                     <span class="material-symbols-outlined">search_check_2</span>
@@ -1995,7 +2020,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
                     <option value="Hóa đơn cũ">Hóa đơn cũ</option>
                     <option value="T">T</option>
                     <option value="TE">TE</option>
-                    <option value="GLOW">GLOW</option>
+                    <option value="Chuyển dưới 100k">Chuyển dưới 100k</option>
                     <option value="VCB">VCB</option>
                     <option value="CK nội dung khác">CK nội dung khác</option>
                     <option value="TGT">TGT</option>
@@ -2766,234 +2791,124 @@ function calculatePaymentsAndText() {
     let lastInvoiceCheckSnapshot = null;
     let lastMatchedInvoiceRow = null;
 
-    ```javascript
-// Hàm xử lý Nộp Hóa đơn
-function handleSubmitInvoice() {
-    if (isSubmittingInvoice) return;
+    // Hàm xử lý Nộp Hóa đơn
+    function handleSubmitInvoice() {
+        if (isSubmittingInvoice) return;
 
-    const tongHP = getNumericValue(document.getElementById('inv_tongHPDong').value);
-    const hpValues = Array.from({ length: 10 }, (_, i) =>
-        getNumericValue(document.getElementById(`inv_hp${i + 1}`).value)
-    );
-    const invoiceAmount = hpValues.reduce((sum, value) => sum + value, 0);
-    const messageArea = document.getElementById('invoiceMessage');
-
-    if (
-        !document.getElementById('inv_hoTen').value.trim() ||
-        !document.getElementById('inv_sdt').value.trim()
-    ) {
-        showInvoiceMessage(
-            'Vui lòng tra cứu học viên trước khi nộp hóa đơn.',
-            'error'
+        const tongHP = getNumericValue(document.getElementById('inv_tongHPDong').value);
+        const hpValues = Array.from({ length: 10 }, (_, i) =>
+            getNumericValue(document.getElementById(`inv_hp${i + 1}`).value)
         );
-        return;
-    }
+        const invoiceAmount = hpValues.reduce((sum, value) => sum + value, 0);
+        const messageArea = document.getElementById('invoiceMessage');
 
-    if (tongHP <= 0 || invoiceAmount <= 0) {
-        showInvoiceMessage(
-            'Vui lòng nhập Tổng HP đóng hợp lệ (lớn hơn 0).',
-            'error'
-        );
-        return;
-    }
+        if (!document.getElementById('inv_hoTen').value.trim() || !document.getElementById('inv_sdt').value.trim()) {
+            showInvoiceMessage('Vui lòng tra cứu học viên trước khi nộp hóa đơn.', 'error');
+            return;
+        }
+        if (tongHP <= 0 || invoiceAmount <= 0) {
+            showInvoiceMessage('Vui lòng nhập Tổng HP đóng hợp lệ (lớn hơn 0).', 'error');
+            return;
+        }
+        // Tổng HP + Giữ ưu đãi chỉ dùng cho logic/đối chiếu tại form,
+        // không ghi vào HOA DON.
+        const formData = {
+            sdt: document.getElementById('inv_sdt').value.trim(),
+            hoTen: document.getElementById('inv_hoTen').value.trim(),
+            phanLoai: document.getElementById('inv_phanLoai').value || 'Cơ sở',
+            coSoThu: document.getElementById('inv_coSo').value.trim(),
+            hopDong: document.getElementById('inv_hopDong').value,
+            ghiChu: document.getElementById('inv_ghiChu').value.trim(),
+            ngayGD: (document.getElementById('inv_ngayGD') || {}).value || new Date().toISOString().slice(0, 10),
+            nguoiXuatHD: document.getElementById('inv_nguoiXuatHD').value.trim(),
+            sessionToken: getEcorpSessionToken(),
+            // Chỉ gửi để server đối chiếu/logic, không append vào Sheet.
+            tongHPDong: tongHP,
+            giuUuDai: document.getElementById('inv_giuUuDai').value,
+            hp1: hpValues[0], hp2: hpValues[1], hp3: hpValues[2], hp4: hpValues[3],
+            hp5: hpValues[4], hp6: hpValues[5], hp7: hpValues[6], hp8: hpValues[7],
+            hp9: hpValues[8], hp10: hpValues[9]
+        };
 
-    // Tổng HP + Giữ ưu đãi chỉ dùng cho logic/đối chiếu tại form,
-    // không ghi vào HOA DON.
-    const formData = {
-        sdt: document.getElementById('inv_sdt').value.trim(),
-        hoTen: document.getElementById('inv_hoTen').value.trim(),
-        phanLoai: document.getElementById('inv_phanLoai').value || 'Cơ sở',
-        coSoThu: document.getElementById('inv_coSo').value.trim(),
-        hopDong: document.getElementById('inv_hopDong').value,
-        ghiChu: document.getElementById('inv_ghiChu').value.trim(),
-        ngayGD: (document.getElementById('inv_ngayGD') || {}).value ||
-            new Date().toISOString().slice(0, 10),
-        nguoiXuatHD: document.getElementById('inv_nguoiXuatHD').value.trim(),
-        sessionToken: getEcorpSessionToken(),
+        const submitBtn = document.getElementById('submitInvoiceBtn');
+        isSubmittingInvoice = true;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Đang nộp...';
+        showInvoiceMessage('Đang lưu hóa đơn...', 'info');
 
-        // Chỉ gửi để server đối chiếu/logic, không append vào Sheet.
-        tongHPDong: tongHP,
-        giuUuDai: document.getElementById('inv_giuUuDai').value,
+        try {
+            ecorpApi('saveInvoice', formData)
+                .then(function(result) {
+                    isSubmittingInvoice = false;
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'NỘP HÓA ĐƠN';
 
-        hp1: hpValues[0],
-        hp2: hpValues[1],
-        hp3: hpValues[2],
-        hp4: hpValues[3],
-        hp5: hpValues[4],
-        hp6: hpValues[5],
-        hp7: hpValues[6],
-        hp8: hpValues[7],
-        hp9: hpValues[8],
-        hp10: hpValues[9]
-    };
+                    if (result && result.status === 'SUCCESS') {
+                        lastInvoiceRowId = Number(result.id) || null;
+                        lastInvoiceCheckSnapshot = {
+                            rowId: lastInvoiceRowId,
+                            sdt: formData.sdt,
+                            amount: invoiceAmount,
+                            ngayGD: formData.ngayGD,
+                            phanLoai: formData.phanLoai
+                        };
+                        const checkBtn = document.getElementById('checkSaoKeBtn');
+                        const checkStatus = document.getElementById('invoiceCheckStatus');
+                        const pdfBtnNew = document.getElementById('taoPdfSaoKeBtn');
+                        const pdfResultNew = document.getElementById('pdfSaoKeResult');
+                        const paymentOutput = document.getElementById('paymentOutputSection');
 
-    const submitBtn = document.getElementById('submitInvoiceBtn');
-
-    isSubmittingInvoice = true;
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Đang nộp...';
-
-    showInvoiceMessage('Đang lưu hóa đơn...', 'info');
-
-    try {
-        ecorpApi('saveInvoice', formData)
-            .then(function(result) {
-
-                isSubmittingInvoice = false;
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'NỘP HÓA ĐƠN';
-
-                if (result && result.status === 'SUCCESS') {
-
-                    lastInvoiceRowId = Number(result.id) || null;
-
-                    lastInvoiceCheckSnapshot = {
-                        rowId: lastInvoiceRowId,
-                        sdt: formData.sdt,
-                        amount: invoiceAmount,
-                        ngayGD: formData.ngayGD,
-                        phanLoai: formData.phanLoai
-                    };
-
-                    const checkBtn =
-                        document.getElementById('checkSaoKeBtn');
-
-                    const checkStatus =
-                        document.getElementById('invoiceCheckStatus');
-
-                    const pdfBtnNew =
-                        document.getElementById('taoPdfSaoKeBtn');
-
-                    const pdfResultNew =
-                        document.getElementById('pdfSaoKeResult');
-
-                    const paymentOutput =
-                        document.getElementById('paymentOutputSection');
-
-                    /*
-                     * Xác định phân loại có phải Cơ sở hay không.
-                     * Không dùng biến này trước khi khai báo.
-                     */
-                    const isCoSo =
-                        String(formData.phanLoai || '')
+                        const isCoSo = String(formData.phanLoai || '')
                             .trim()
                             .normalize('NFD')
                             .replace(/[\u0300-\u036f]/g, '')
                             .toUpperCase() === 'CO SO';
 
-                    /*
-                     * FIX:
-                     * Sau khi NỘP HÓA ĐƠN thành công,
-                     * vùng "Thanh toán & Hóa đơn" luôn được ẩn.
-                     *
-                     * Vùng này chỉ được mở lại khi người dùng
-                     * bấm XUẤT QR CODE.
-                     */
-                    if (paymentOutput) {
-                        paymentOutput.classList.add('hidden');
-                    }
-
-                    /*
-                     * Reset phần PDF.
-                     */
-                    if (pdfBtnNew) {
-                        pdfBtnNew.classList.add('hidden');
-                        pdfBtnNew.disabled = false;
-                        pdfBtnNew.textContent = 'XUẤT PDF HÓA ĐƠN';
-                    }
-
-                    if (pdfResultNew) {
-                        pdfResultNew.classList.add('hidden');
-                        pdfResultNew.innerHTML = '';
-                        pdfResultNew.classList.remove('error');
-                    }
-
-                    lastMatchedInvoiceRow = null;
-
-                    /*
-                     * Chỉ cho CHECK SAO KÊ đối với Cơ sở.
-                     */
-                    if (checkBtn) {
-                        checkBtn.disabled =
-                            !lastInvoiceRowId || !isCoSo;
-                    }
-
-                    /*
-                     * Cập nhật trạng thái hiển thị.
-                     */
-                    if (checkStatus) {
-
-                        if (isCoSo) {
-
-                            checkStatus.textContent =
-                                'Hóa đơn đã lưu. Có thể CHECK SAO KÊ.';
-
-                        } else if (result.requiresApproval) {
-
-                            checkStatus.textContent =
-                                'Đang chờ Quản lý/Lễ tân duyệt. Sau khi được duyệt, chỉ cần XUẤT PDF.';
-
-                        } else if (result.alreadyPaid) {
-
-                            checkStatus.textContent =
-                                '✓ Hóa đơn đã được duyệt. Có thể XUẤT PDF.';
-
-                        } else {
-
-                            checkStatus.textContent =
-                                'Hóa đơn đã được duyệt, có thể xuất PDF.';
+                        // Sau khi GỬI HÓA ĐƠN: luôn giữ vùng "Thanh toán & Hóa đơn" ẨN.
+                        // Vùng này chỉ được mở bởi generatePaymentQRCode() khi người dùng bấm XUẤT QR CODE.
+                        if (paymentOutput) paymentOutput.classList.add('hidden');
+                        if (pdfBtnNew) {
+                            pdfBtnNew.classList.add('hidden');
+                            pdfBtnNew.disabled = false;
+                            pdfBtnNew.textContent = 'XUẤT PDF HÓA ĐƠN';
                         }
+                        if (pdfResultNew) {
+                            pdfResultNew.classList.add('hidden');
+                            pdfResultNew.innerHTML = '';
+                            pdfResultNew.classList.remove('error');
+                        }
+                        lastMatchedInvoiceRow = null;
+                        if (checkBtn) checkBtn.disabled = !lastInvoiceRowId || !isCoSo;
+                        if (checkStatus) {
+                            if (isCoSo) {
+                                checkStatus.textContent = 'Hóa đơn đã lưu. Có thể CHECK SAO KÊ.';
+                            } else if (result.requiresApproval) {
+                                checkStatus.textContent = 'Đang chờ Quản lý/Lễ tân duyệt. Sau khi được duyệt, chỉ cần XUẤT PDF.';
+                            } else if (result.alreadyPaid) {
+                                checkStatus.textContent = '✓ Hóa đơn đã được duyệt. Có thể XUẤT PDF.';
+                            } else {
+                                checkStatus.textContent = 'Hóa đơn đã được duyệt, có thể xuất PDF.';
+                            }
+                        }
+                        messageArea.classList.add('hidden');
+                        showInvoiceSuccessModal(result.id);
+                    } else {
+                        showInvoiceMessage('Lỗi nghiệp vụ khi nộp hóa đơn: ' + ((result && (result.error || result.message)) || 'Không rõ lỗi.'), 'error');
                     }
-
-                    /*
-                     * Ẩn thông báo cũ và hiện popup thành công.
-                     */
-                    messageArea.classList.add('hidden');
-
-                    showInvoiceSuccessModal(result.id);
-
-                } else {
-
-                    showInvoiceMessage(
-                        'Lỗi nghiệp vụ khi nộp hóa đơn: ' +
-                        (
-                            result &&
-                            (result.error || result.message)
-                        ) ||
-                        'Không rõ lỗi.',
-                        'error'
-                    );
-                }
-
-            })
-            .catch(function(error) {
-
-                isSubmittingInvoice = false;
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'NỘP HÓA ĐƠN';
-
-                showInvoiceMessage(
-                    'Lỗi hệ thống khi nộp hóa đơn: ' +
-                    ecorpApiErrorText(error),
-                    'error'
-                );
-            });
-
-    } catch (e) {
-
-        isSubmittingInvoice = false;
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'NỘP HÓA ĐƠN';
-
-        showInvoiceMessage(
-            'Lỗi hệ thống khi nộp hóa đơn: ' +
-            ecorpApiErrorText(e),
-            'error'
-        );
+                })
+                .catch(function(error) {
+                    isSubmittingInvoice = false;
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'NỘP HÓA ĐƠN';
+                    showInvoiceMessage('Lỗi hệ thống khi nộp hóa đơn: ' + ecorpApiErrorText(error), 'error');
+                });
+        } catch (e) {
+            isSubmittingInvoice = false;
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'NỘP HÓA ĐƠN';
+            showInvoiceMessage('Lỗi: Không thể kết nối với Google Apps Script.', 'error');
+        }
     }
-}
-```
-
 
 
     // =========================================================
@@ -3959,6 +3874,17 @@ function handleSubmitInvoice() {
         if (e.key === 'Escape') closeModal();
     });
 })();
+</script>
+
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function (err) {
+      console.warn('ECORP Service Worker registration failed:', err);
+    });
+  });
+}
 </script>
 
 </body>
