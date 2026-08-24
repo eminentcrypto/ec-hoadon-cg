@@ -1683,6 +1683,19 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="ECORP Hóa đơn">
 
+
+<style id="responsive-phone-label">
+.phone-label-mobile { display: none; }
+
+@media (max-width: 640px) {
+    .phone-label-desktop { display: none !important; }
+    .phone-label-mobile {
+        display: inline !important;
+        white-space: nowrap;
+    }
+}
+</style>
+
 </head>
 <body class="ecorp-auth-pending">
 
@@ -1875,7 +1888,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
 
             <div id="lookupBody">
             <div class="search-area">
-                <label for="phoneNumber">Số điện thoại:</label>
+                <label for="phoneNumber"><span class="phone-label-desktop">Số điện thoại:</span><span class="phone-label-mobile">Số ĐT:</span></label>
                 <input type="text" id="phoneNumber" placeholder="" maxlength="15">
                 <button id="searchBtn" class="icon-action-btn icon-action-primary" type="button" title="Tìm kiếm" aria-label="Tìm kiếm">
                     <span class="material-symbols-outlined">search_check_2</span>
