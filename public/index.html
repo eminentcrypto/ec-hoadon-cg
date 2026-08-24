@@ -1671,6 +1671,18 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
     .reissue-search-amount{justify-self:start}
 }
 </style>
+
+    <!-- ECORP favicon / app icons -->
+    <link rel="icon" type="image/png" href="https://ecorp.edu.vn/wp-content/uploads/fav40-ecorp.png">
+    <link rel="shortcut icon" type="image/png" href="https://ecorp.edu.vn/wp-content/uploads/fav40-ecorp.png">
+    <link rel="apple-touch-icon" href="https://ecorp.edu.vn/wp-content/uploads/Logo-Ecorp-doc-trang-nen-xanh-vuong-1.png">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#0C4FB3">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ECORP Hóa đơn">
+
 </head>
 <body class="ecorp-auth-pending">
 
@@ -3849,6 +3861,17 @@ function calculatePaymentsAndText() {
         if (e.key === 'Escape') closeModal();
     });
 })();
+</script>
+
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function (err) {
+      console.warn('ECORP Service Worker registration failed:', err);
+    });
+  });
+}
 </script>
 
 </body>
