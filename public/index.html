@@ -2833,8 +2833,9 @@ function calculatePaymentsAndText() {
                         const pdfResultNew = document.getElementById('pdfSaoKeResult');
                         const paymentOutput = document.getElementById('paymentOutputSection');
 
-                        // Khu vực PDF luôn có sẵn ngay sau khi NỘP HÓA ĐƠN.
-                        if (paymentOutput) paymentOutput.classList.remove('hidden');
+                        // Với Cơ sở: giữ nguyên — khu vực Thanh toán & Hóa đơn hiện ngay sau khi NỘP để CHECK SAO KÊ.
+                        // Với các Phân loại khác Cơ sở: giữ ẩn cho tới khi người dùng bấm XUẤT QR CODE.
+                        if (paymentOutput && isCoSo) paymentOutput.classList.remove('hidden');
                         if (pdfBtnNew) { pdfBtnNew.classList.remove('hidden'); pdfBtnNew.disabled = false; pdfBtnNew.textContent = 'XUẤT PDF HÓA ĐƠN'; }
                         if (pdfResultNew) { pdfResultNew.classList.add('hidden'); pdfResultNew.innerHTML = ''; pdfResultNew.classList.remove('error'); }
                         lastMatchedInvoiceRow = null;
@@ -3520,7 +3521,7 @@ function calculatePaymentsAndText() {
         if (resultBox) { resultBox.classList.add('hidden'); resultBox.classList.remove('error'); resultBox.innerHTML = ''; }
 
         ecorpApi('taoPdfSaoKe', {
-                rowId: lastMatchedInvoiceRow,
+                rowId: rowId,
                 sessionToken: getEcorpSessionToken()
             })
             .then(function (result) {
