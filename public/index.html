@@ -2839,11 +2839,11 @@ function calculatePaymentsAndText() {
                             .replace(/[\u0300-\u036f]/g, '')
                             .toUpperCase() === 'CO SO';
 
-                        // Cơ sở: hiện khu vực Thanh toán & Hóa đơn ngay để CHECK SAO KÊ.
-                        // Khác Cơ sở: giữ ẩn cho tới khi bấm XUẤT QR CODE.
-                        if (paymentOutput && isCoSo) paymentOutput.classList.remove('hidden');
+                        // Sau khi GỬI HÓA ĐƠN: luôn giữ vùng "Thanh toán & Hóa đơn" ẨN.
+                        // Vùng này chỉ được mở bởi generatePaymentQRCode() khi người dùng bấm XUẤT QR CODE.
+                        if (paymentOutput) paymentOutput.classList.add('hidden');
                         if (pdfBtnNew) {
-                            pdfBtnNew.classList.remove('hidden');
+                            pdfBtnNew.classList.add('hidden');
                             pdfBtnNew.disabled = false;
                             pdfBtnNew.textContent = 'XUẤT PDF HÓA ĐƠN';
                         }
