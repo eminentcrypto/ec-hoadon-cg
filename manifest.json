@@ -1,0 +1,19 @@
+{
+  "name": "ECorp Hóa đơn",
+  "short_name": "EC Hóa đơn",
+  "description": "Hệ thống Hóa đơn ECORP",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://ecorp.edu.vn/wp-content/uploads/Logo-Ecorp-doc-trang-nen-xanh-vuong.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

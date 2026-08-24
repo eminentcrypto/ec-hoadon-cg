@@ -1,0 +1,3878 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ứng dụng Tra cứu & Hóa đơn</title>
+<script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Identity Services: dùng cho màn hình đăng nhập bằng tài khoản Google -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        // Thư viện GIS gọi lại hàm này ngay khi tải xong (dù script có async/defer).
+        // Đặt cờ sẵn để đoạn script khởi tạo đăng nhập (nằm dưới body) biết lúc nào bắt đầu.
+        window.onGoogleLibraryLoad = function () {
+            window.__ecorpGisReady = true;
+            if (typeof window.__ecorpInitAuthWhenReady === 'function') {
+                window.__ecorpInitAuthWhenReady();
+            }
+        };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+	<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0..200" />
+
+
+
+<style>
+    /* --- KHỐI CHUNG VÀ LAYOUT CHÍNH --- */
+    :root {
+        --primary-blue: #0c4fb3;
+        --primary-red: #dc2626;
+        --primary-green: #10b981;
+        --bg-light: #f4f4f9;
+    }
+
+    body {
+        font-family: 'Inter', sans-serif;
+        background-color: var(--bg-light);
+        padding: 1rem;
+    }
+
+    /* Ẩn toàn bộ giao diện chính cho tới khi xác thực đăng nhập xong */
+    body.ecorp-auth-pending header.ecorp-topbar,
+    body.ecorp-auth-pending .main-container {
+        display: none !important;
+    }
+
+    /* ===================== MÀN HÌNH ĐĂNG NHẬP GOOGLE ===================== */
+    #ecorpLoginOverlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        padding: 24px;
+        background: linear-gradient(160deg, #0c4fb3 0%, #093c8a 100%);
+        font-family: 'Inter', sans-serif;
+    }
+    #ecorpLoginOverlay.hidden { display: none !important; }
+
+    .ecorp-login-logo-card {
+        background: #fff;
+        border-radius: 20px;
+        padding: 15px 20px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .ecorp-login-logo-card img {
+        max-width: 220px;
+        height: auto;
+        display: block;
+    }
+
+    .ecorp-login-status {
+        color: rgba(255,255,255,0.92);
+        font-weight: 600;
+        font-size: 0.95rem;
+        letter-spacing: 0.2px;
+        text-align: center;
+    }
+
+    .ecorp-login-spinner {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 3px solid rgba(255,255,255,0.35);
+        border-top-color: #fff;
+        animation: ecorp-spin 0.8s linear infinite;
+    }
+    @keyframes ecorp-spin { to { transform: rotate(360deg); } }
+
+    #ecorpGsiButton {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .ecorp-login-error {
+        max-width: 360px;
+        text-align: center;
+        background: rgba(220, 38, 38, 0.15);
+        border: 1px solid rgba(255,255,255,0.35);
+        color: #fff;
+        padding: 12px 16px;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        display: none;
+    }
+    .ecorp-login-error.visible { display: block; }
+
+    .main-container {
+        display: grid;
+        gap: 1.5rem; /* 24px */
+        max-width: 1400px;
+        margin: auto;
+        grid-template-columns: 1fr 1fr; /* Mặc định 2 cột */
+    }
+    
+    @media (max-width: 1024px) {
+        .main-container {
+            grid-template-columns: 1fr; /* Mobile/Tablet: 1 cột */
+            padding: 0.5rem;
+        }
+    }
+
+    /* Tiêu đề H3 Custom */
+    .custom-h3 {
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1.25rem;
+        text-align: center;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: white;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    /* Container trái/phải */
+    .lookup-container, .invoice-container {
+        background-color: white;
+        padding: 1.5rem;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+    
+    .lookup-container {
+        border-left: 5px solid var(--primary-blue);
+    }
+
+    .invoice-container {
+        border-right: 5px solid var(--primary-red);
+    }
+
+
+    /* --- KHỐI TRA CỨU: CHỈNH SỬA Ô INPUT & LAYOUT GRID --- */
+
+    /* [YÊU CẦU 1] Responsive cho search area */
+    .search-area {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.3rem;
+        align-items: center;
+        justify-content: center;
+    }
+    .search-area label {
+        white-space: nowrap;
+        font-weight: 500;
+    }
+    .search-area input {
+        /* Đã sửa: Giảm độ dài input SĐT theo yêu cầu */
+        width: 33%; 
+        flex-grow: 0; /* Quan trọng để không giãn ra */
+        
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.375rem;
+        border: 1px solid #d1d5db;
+    }
+    .search-area button {
+        padding: 0.5rem 1rem;
+        border-radius: 0.375rem;
+        font-weight: 600;
+        color: white;
+        transition: background-color 0.2s;
+        white-space: nowrap;
+    }
+    #searchBtn {
+        background-color: var(--primary-blue);
+    }
+    #searchBtn:hover {
+        background-color: var(--primary-red);
+    }
+    #resetBtn {
+        background-color: #6c757d;
+    }
+    #resetBtn:hover {
+        background-color: #5a6268;
+    }
+
+
+    /* [YÊU CẦU 2] Grid thông tin (4 cột: Label-Value Label-Value) */
+    .info-grid {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 13px 10px;
+    align-items: center;
+    margin-bottom: 15px;
+}
+select#inv_kyHanTraGop {
+    grid-column: 2 / -1 !important; 
+}
+    .info-label {
+        font-weight: 500;
+        color: #4b5563; 
+        text-align: left;
+        padding-right: 0.5rem;
+        white-space: nowrap; /* Quan trọng: Ngăn Label bị xuống dòng */
+    }
+    
+    /* [YÊU CẦU 3] Chiều cao cố định cho ô Value */
+    .info-value, .info-grid input[type="text"], .info-grid select, .info-grid input[type="date"] {
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.375rem;
+        border: 1px solid #d1d5db;
+        width: 100%;
+        box-sizing: border-box;
+        background-color: #f9fafb;
+        transition: border-color 0.2s;
+
+        /* THAY ĐỔI LỚN: Chiều cao cố định (38px) */
+        height: 42px; 
+        min-height: 42px;
+        /* Đối với div hiển thị, cần căn giữa nội dung */
+        display: flex;
+        align-items: center;
+    }
+
+    .info-grid input[readonly] {
+        background-color: #e5e7eb;
+        color: #6b7280;
+        cursor: not-allowed;
+    }
+    
+    .info-value {
+    font-weight: 600;
+    color: #1f2937;
+    background-color: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+    min-width: 0;
+    box-sizing: border-box;
+    user-select: text;
+}
+
+    /* Định dạng tiền tệ */
+    .money {
+        color: #16a34a; 
+        font-weight: 700;
+    }
+    .remaining-money {
+        color: var(--primary-red); 
+        font-weight: 700;
+    }
+
+    /* Header phân đoạn trong Invoice */
+    .section-header-blue, .section-header-red, .section-header-green {
+        /* Quan trọng: Trải dài hết 4 cột của info-grid */
+  grid-column:1/-1;height:45px;margin:3px 0;padding:0 15px;display:flex;align-items:center;border-radius:10px;
+  color:#0c4fb3;text-align:left;font-size:13px;font-weight:800;letter-spacing:.2px;position:relative;overflow:hidden;
+  background:linear-gradient(145deg,#f8fbff,#eaf3ff);border:1px solid #d4e4fb;
+  box-shadow:0 7px 16px rgba(17,73,150,.07),inset 0 1px 0 #fff;
+    }
+	.section-header-blue::before,.section-header-red::before,.section-header-green::before{content:"";width:7px;height:23px;border-radius:5px;background:linear-gradient(#1680ff,#0c4fb3);margin-right:10px;box-shadow:0 4px 9px rgba(12,79,179,.22)}
+.section-header-blue::after,.section-header-red::after,.section-header-green::after{content:"";position:absolute;right:-25px;top:-40px;width:150px;height:80px;border-radius:50%;border:1px solid rgba(20,110,245,.10)}
+    .section-header-blue { background-color: var(--primary-blue); }
+    .section-header-red { background-color: var(--primary-red); }
+    .section-header-green { background-color: var(--primary-green); }
+
+    /* Bảng Levels */
+    .level-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1.5rem;
+    }
+    .level-table th, .level-table td {
+        border: 1px solid #e5e7eb;
+        padding: 0.75rem;
+        text-align: left;
+    }
+    .level-table th {
+        background-color: #f3f4f6;
+        font-weight: 600;
+        color: #1f2937;
+    }
+    .level-table tbody tr:nth-child(even) {
+        background-color: #f9fafb;
+    }
+
+    /* Thanh chia */
+    .divider {
+        height: 1px;
+        background-color: #e5e7eb;
+        margin: .8rem 0;
+        grid-column: 1 / -1; /* Đảm bảo divider trải hết 4 cột */
+    }
+    
+    /* Message box */
+    .message {
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        font-weight: 500;
+        text-align: center;
+    }
+    .hidden {
+        display: none;
+    }
+    
+    /* --- NÚT SUBMIT --- */
+    #submitInvoiceBtn {
+        padding: 0.75rem 1.5rem;
+        background-color: var(--primary-blue);
+        color: white;
+        border: none;
+        border-radius: 0.375rem;
+        font-weight: 700;
+        transition: background-color 0.2s, transform 0.1s;
+    }
+    #submitInvoiceBtn:hover {
+        background-color: var(--primary-red);
+        transform: translateY(-1px);
+    }
+    #clearInvoiceFormBtn {
+        padding: 0.75rem 1.5rem;
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 0.375rem;
+        font-weight: 700;
+        transition: background-color 0.2s;
+    }
+    #clearInvoiceFormBtn:hover {
+        background-color: #5a6268;
+    }
+
+
+
+    /* =========================================================
+       TRA CỨU THU GỌN + QR / LINK HÓA ĐƠN
+    ========================================================= */
+    .lookup-header {
+        background-color: var(--primary-blue);
+        color: #fff;
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        font-weight: 700;
+        position: relative;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -1px rgba(0,0,0,.06);
+    }
+    .lookup-toggle-btn {
+        position: absolute;
+        right: 10px;
+        width: 34px;
+        height: 34px;
+        border: none;
+        border-radius: 6px;
+        background: rgba(255,255,255,.18);
+        color: #fff;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background-color .2s, transform .2s;
+    }
+    .lookup-toggle-btn:hover { background: rgba(255,255,255,.30); }
+
+    .payment-output-section { margin-top: 1.5rem; }
+    .payment-output-title {
+        background-color: var(--primary-blue);
+        color: #fff;
+        padding: .65rem 1rem;
+        text-align: center;
+        font-weight: 700;
+        border-radius: .4rem;
+        margin-bottom: 1rem;
+    }
+    .payment-output-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        align-items: stretch;
+    }
+    .payment-card {
+        border: 1px solid #e5e7eb;
+        border-radius: .5rem;
+        overflow: hidden;
+        background: #fff;
+        min-width: 0;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    .payment-card-header {
+        color: #fff;
+        text-align: center;
+        padding: .7rem;
+        font-weight: 700;
+    }
+    .qr-header { background: #16a34a; }
+    .invoice-link-header { background: var(--primary-red); }
+    .qr-content {
+        min-height: 290px;
+        flex: 1 1 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        padding: 1rem;
+        background: #fff;
+    }
+    .payment-qr-image {
+        width: min(100%, 265px);
+        height: 265px;
+        object-fit: contain;
+        display: block;
+    }
+    .qr-payment-info {
+        margin-top: .25rem;
+        text-align: center;
+        font-size: .82rem;
+        color: #374151;
+        word-break: break-word;
+    }
+    .qr-footer {
+        background: #16a34a;
+        color: #fff;
+        text-align: center;
+        padding: .65rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background-color .2s;
+    }
+    .qr-footer:hover { background: #15803d; }
+    .invoice-link-content {
+        min-height: 290px;
+        flex: 1 1 auto;
+        padding: 1.25rem 1.25rem 0;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 0;
+        box-sizing: border-box;
+    }
+    .invoice-link-empty {
+        color: #9ca3af;
+        text-align: center;
+        line-height: 1.5;
+    }
+    #invoiceLinkResult { width: 100%; }
+    #invoiceLinkInput {
+        width: 100%;
+        padding: .65rem .75rem;
+        border: 1px solid #d1d5db;
+        border-radius: .375rem;
+        box-sizing: border-box;
+        background: #f9fafb;
+    }
+    #copyInvoiceLinkBtn,
+    .send-invoice-link-btn {
+        border: none;
+        color: #fff;
+        padding: .7rem 1rem;
+        border-radius: .375rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    #copyInvoiceLinkBtn { background: var(--primary-blue); margin-top: .5rem; width: 100%; }
+    #copyInvoiceLinkBtn:hover { background: #083f91; }
+    .send-invoice-link-btn {
+        background: linear-gradient(135deg, #0c4fb3, #2563eb);
+        min-width: 220px;
+        min-height: 48px;
+        padding: .55rem 1.15rem;
+        border-radius: 12px;
+        box-shadow: 0 8px 20px rgba(37,99,235,.20);
+        transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+    }
+    .send-invoice-link-btn:hover {
+        background: linear-gradient(135deg, #0b449c, #1d4ed8);
+        transform: translateY(-1px);
+        box-shadow: 0 12px 26px rgba(37,99,235,.26);
+    }
+    .send-invoice-link-btn:disabled {
+        opacity: .55;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+    .invoice-check-hint {
+        text-align: center;
+        color: #64748b;
+        line-height: 1.55;
+        font-size: .92rem;
+        max-width: 330px;
+    }
+    .invoice-check-status {
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: #475569;
+        font-size: .9rem;
+		margin-bottom: 1rem
+    }
+    .invoice-link-card .send-invoice-link-btn {
+        margin-top: auto;
+        margin-bottom: 0;
+        width: calc(100% + 2.5rem);
+        min-height: 40px;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .invoice-link-card .send-invoice-link-btn:hover {
+        transform: none;
+        box-shadow: none;
+    }
+    .invoice-link-card #taoPdfSaoKeBtn {
+        background: linear-gradient(135deg, #059669, #10b981);
+        margin-top: .15rem;
+    }
+    .invoice-link-card #taoPdfSaoKeBtn:hover {
+        background: linear-gradient(135deg, #047857, #059669);
+    }
+    .pdf-sao-ke-result {
+    width: calc(100% - 40px);
+    margin: -.4rem 20px 0 20px;
+    padding: .85rem 1rem;
+    border-radius: .6rem;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    box-sizing: border-box;
+    text-align: center;
+}
+    .pdf-sao-ke-result a {
+        display: inline-block;
+        color: #047857;
+        font-weight: 800;
+        text-decoration: underline;
+        word-break: break-all;
+    }
+    .pdf-sao-ke-result.error {
+        background: #fff7ed;
+        border-color: #fed7aa;
+        color: #9a3412;
+        font-weight: 700;
+    }
+
+    #generateQrBtn {
+        padding: .75rem 1.5rem;
+        background-color: #16a34a;
+        color: #fff;
+        border: none;
+        border-radius: .375rem;
+        font-weight: 700;
+        transition: background-color .2s, transform .1s;
+        margin-left: .25rem;
+    }
+    #generateQrBtn:hover { background-color: #15803d; transform: translateY(-1px); }
+    #generateQrBtn:disabled { opacity: .65; cursor: not-allowed; transform: none; }
+    .qr-loading { color: #6b7280; font-weight: 600; text-align: center; }
+
+    @media (max-width: 640px) {
+        .payment-output-grid { grid-template-columns: 1fr; }
+        .lookup-header { font-size: 1rem; }
+        .payment-qr-image { width: 220px; height: 220px; }
+        #generateQrBtn { margin-left: 0; margin-top: .5rem; }
+    }
+
+    /* --- RESPONSIVE MOBILE TỔNG QUÁT --- */
+/* --- PHẦN RESPONSIVE MOBILE (DƯỚI 640PX) --- */
+@media (max-width: 640px) {
+        .info-value {font-size: .92rem !important;}
+    /* Dữ liệu chỉ 1 dòng (Label - Value) */
+    .info-grid {
+        grid-template-columns: auto 1fr; 
+    }
+
+    /* Đảm bảo các thành phần Header/Divider chiếm hết chiều rộng mới */
+    .section-header-blue, 
+    .section-header-red, 
+    .section-header-green, 
+    .divider {
+        grid-column: 1 / -1; 
+    }
+
+    /* RESET KỲ HẠN TRẢ GÓP về cột 2 (cột Value) */
+ select#inv_kyHanTraGop {
+        grid-column: 2 / 3 !important;;
+    }
+
+    /* RESET BẰNG CHỮ về cột 2 (cột Value) */
+    .bang-chu-output {
+        grid-column: 2 / 3;
+        height: auto; 
+    }
+    
+    /* Chỉnh lại Label căn lề trái và không padding bên phải */
+    .info-label {
+        text-align: left;
+        padding-right: 0;
+        margin-top: 0.5rem;
+    }
+    
+    /* Chỉnh lại phần SĐT trên Mobile */
+    .search-area {
+        flex-wrap: wrap; 
+    }
+    .search-area input {
+        width: 100%; 
+        flex-grow: 1;
+    }
+    .search-area label {
+        flex-basis: 100%; 
+        text-align: left;
+    }
+    .search-area button {
+        flex-grow: 1;
+        flex-basis: 45%; 
+    }
+}
+
+
+    /* =========================================================
+       PREMIUM SUCCESS MODAL
+       ========================================================= */
+    .invoice-success-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.25rem;
+        background: rgba(15, 23, 42, .52);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        opacity: 1;
+        visibility: visible;
+        transition: opacity .25s ease, visibility .25s ease;
+    }
+
+    .invoice-success-modal.hidden {
+        display: flex;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+
+    .invoice-success-card {
+        width: min(100%, 520px);
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,.75);
+        border-radius: 24px;
+        padding: 2rem 2rem 1.65rem;
+        background: linear-gradient(145deg, rgba(255,255,255,.97), rgba(248,250,252,.94));
+        box-shadow: 0 30px 80px rgba(15,23,42,.28), 0 8px 30px rgba(15,23,42,.12);
+        transform: translateY(0) scale(1);
+        animation: invoiceSuccessPop .34s cubic-bezier(.2,.8,.2,1);
+        text-align: center;
+    }
+
+    .invoice-success-card::before {
+        content: '';
+        position: absolute;
+        width: 230px;
+        height: 230px;
+        top: -125px;
+        right: -80px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(16,185,129,.22), rgba(16,185,129,0) 70%);
+        pointer-events: none;
+    }
+
+    .invoice-success-card::after {
+        content: '';
+        position: absolute;
+        width: 180px;
+        height: 180px;
+        bottom: -110px;
+        left: -70px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(12,79,179,.14), rgba(12,79,179,0) 70%);
+        pointer-events: none;
+    }
+
+    .invoice-success-icon {
+        width: 72px;
+        height: 72px;
+        margin: 0 auto 1rem;
+        display: grid;
+        place-items: center;
+        border-radius: 22px;
+        color: #fff;
+        background: linear-gradient(135deg, #10b981, #059669);
+        box-shadow: 0 12px 30px rgba(16,185,129,.30);
+        font-size: 2rem;
+        font-weight: 900;
+        position: relative;
+        z-index: 1;
+    }
+
+    .invoice-success-title {
+        margin: 0;
+        color: #0f172a;
+        font-size: clamp(1.35rem, 2.5vw, 1.7rem);
+        line-height: 1.25;
+        font-weight: 800;
+        letter-spacing: -.02em;
+        position: relative;
+        z-index: 1;
+    }
+
+    .invoice-success-message {
+        margin: .8rem auto 0;
+        max-width: 430px;
+        color: #475569;
+        font-size: 1rem;
+        line-height: 1.65;
+        position: relative;
+        z-index: 1;
+    }
+
+    .invoice-success-message strong { color: #0f766e; }
+
+    .invoice-success-id {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1rem;
+        padding: .45rem .8rem;
+        border-radius: 999px;
+        background: #ecfdf5;
+        color: #047857;
+        font-size: .82rem;
+        font-weight: 700;
+        border: 1px solid #a7f3d0;
+        position: relative;
+        z-index: 1;
+    }
+
+    .invoice-success-close {
+        width: 100%;
+        margin-top: 1.35rem;
+        border: 0;
+        border-radius: 13px;
+        padding: .82rem 1rem;
+        color: #fff;
+        background: linear-gradient(135deg, #0c4fb3, #2563eb);
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 8px 22px rgba(37,99,235,.22);
+        transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+        position: relative;
+        z-index: 1;
+    }
+
+    .invoice-success-close:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.04);
+        box-shadow: 0 12px 28px rgba(37,99,235,.28);
+    }
+
+    @keyframes invoiceSuccessPop {
+        from { opacity: 0; transform: translateY(14px) scale(.96); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @media (max-width: 640px) {
+        .invoice-success-card { padding: 1.5rem 1.2rem 1.25rem; border-radius: 20px; }
+        .invoice-success-icon { width: 64px; height: 64px; border-radius: 19px; }
+    }
+
+    /* =========================================================
+       PREMIUM CHECK SAO KE MODAL
+       ========================================================= */
+    .invoice-check-modal {
+        position: fixed; inset: 0; z-index: 10000;
+        display: flex; align-items: center; justify-content: center;
+        padding: 1.25rem; background: rgba(15,23,42,.56);
+        backdrop-filter: blur(11px); -webkit-backdrop-filter: blur(11px);
+        opacity: 1; visibility: visible; transition: opacity .25s ease, visibility .25s ease;
+    }
+    .invoice-check-modal.hidden { display:flex; opacity:0; visibility:hidden; pointer-events:none; }
+    .invoice-check-card {
+        width:min(100%, 590px); max-height:min(86vh,760px); overflow:auto;
+        position:relative; border:1px solid rgba(255,255,255,.78); border-radius:24px;
+        padding:1.65rem 1.65rem 1.4rem;
+        background:linear-gradient(145deg,rgba(255,255,255,.98),rgba(248,250,252,.95));
+        box-shadow:0 30px 80px rgba(15,23,42,.30),0 8px 30px rgba(15,23,42,.13);
+        animation: invoiceSuccessPop .34s cubic-bezier(.2,.8,.2,1);
+    }
+    .invoice-check-head { display:flex; gap:.9rem; align-items:center; }
+    .invoice-check-icon {
+        width:54px; height:54px; flex:0 0 54px; display:grid; place-items:center;
+        border-radius:17px; color:#fff; font-weight:900; font-size:1.45rem;
+        background:linear-gradient(135deg,#0c4fb3,#2563eb);
+        box-shadow:0 10px 25px rgba(37,99,235,.24);
+    }
+    .invoice-check-title { margin:0; color:#0f172a; font-size:1.3rem; font-weight:850; }
+    .invoice-check-subtitle { margin:.2rem 0 0; color:#64748b; font-size:.9rem; }
+    .invoice-check-result { margin:1.1rem 0 .9rem; padding:1rem; border-radius:16px; background:#f8fafc; border:1px solid #e2e8f0; }
+    .invoice-check-result.success { background:#ecfdf5; border-color:#a7f3d0; }
+    .invoice-check-result.error { background:#fff7ed; border-color:#fed7aa; }
+    .invoice-check-result-title { font-weight:850; color:#0f172a; margin-bottom:.55rem; }
+    .invoice-check-reason { color:#475569; line-height:1.6; font-size:.92rem; }
+    .invoice-check-steps { margin:.75rem 0 0; padding:0; list-style:none; display:grid; gap:.42rem; }
+    .invoice-check-steps li { display:flex; gap:.55rem; align-items:flex-start; }
+    .invoice-check-steps .dot { width:9px; height:9px; margin-top:.42rem; border-radius:50%; flex:0 0 9px; background:#cbd5e1; }
+    .invoice-check-steps li.ok .dot { background:#10b981; }
+    .invoice-check-steps li.bad .dot { background:#f97316; }
+    .invoice-check-steps li strong { color:#0f172a; }
+    .invoice-check-close { width:100%; border:0; border-radius:13px; padding:.82rem 1rem; color:#fff; background:#0f172a; font-weight:800; cursor:pointer; }
+    .invoice-check-close:hover { filter:brightness(1.08); }
+    @media (max-width:640px) { .invoice-check-card { padding:1.25rem; border-radius:20px; } }
+
+
+    /* ===== ECORP PREMIUM DASHBOARD — VISUAL ONLY ===== */
+    :root {
+        --ecorp-navy:#002e80; --ecorp-blue:#0b5fdb; --ecorp-blue2:#2563eb;
+        --ecorp-green:#079b5b; --ecorp-green2:#16b875;
+        --ecorp-ink:#0f2445; --ecorp-shadow:0 24px 60px rgba(0,46,128,.13),0 8px 24px rgba(15,23,42,.08);
+    }
+    html{min-height:100%}
+    body{
+        min-height:100vh;margin:0;padding:22px;color:var(--ecorp-ink);
+        background:url("https://ecorp.edu.vn/wp-content/uploads/bg-hoa-don.png") center top/cover fixed no-repeat;
+        background-color:#eef5ff;
+    }
+    .ecorp-topbar{
+        width:min(1400px,100%);margin:0 auto 22px;padding:0;box-sizing:border-box;
+        display:flex;align-items:center;justify-content:space-between;gap:24px;position:relative;overflow:visible;
+    }
+    .ecorp-brand,.ecorp-status-badges{position:relative;z-index:1}
+    .ecorp-brand{display:flex;align-items:center;gap:18px;min-width:0}
+    .ecorp-logo-wrap{width:145px;min-width:145px;height:60x;display:grid;place-items:center;padding:0;box-sizing:border-box}
+    .ecorp-logo{height:56px;width:auto;display:block;object-fit:contain;filter:drop-shadow(0 5px 10px rgba(0,0,0,.22))}
+	.ecorp-brand-divider{width:1px;height:48px;background:rgba(255,255,255,.24)}
+    .ecorp-brand-title{color:#fff;font-size:clamp(1.05rem,2vw,1.62rem);font-weight:850;letter-spacing:.015em;line-height:1.15;text-shadow:0 2px 14px rgba(0,0,0,.18)}
+    .ecorp-brand-subtitle{margin-top:5px;color:rgba(255,255,255,.76);font-size:.78rem;font-weight:600;letter-spacing:.08em}
+    .ecorp-status-badges{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end}
+    .ecorp-status{display:flex;align-items:center;gap:8px;min-width:120px;padding:8px 11px;border-radius:13px;color:#fff;
+        background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.12);backdrop-filter:blur(8px)}
+    .ecorp-status-icon{width:27px;height:27px;display:grid;place-items:center;flex:0 0 27px;border-radius:9px;color:#fff;
+        background:linear-gradient(145deg,#1682ff,#0c4fb3);box-shadow:0 5px 14px rgba(16,185,129,.22);font-weight:900}
+    .ecorp-status strong,.ecorp-status small{display:block;white-space:nowrap}
+    .ecorp-status strong{font-size:.82rem}.ecorp-status small{margin-top:2px;color:rgba(255,255,255,.70);font-size:.62rem}
+    .main-container{width:min(1400px,100%);max-width:none;gap:22px}
+    .lookup-container,.invoice-container{
+        position:relative;overflow:hidden;padding:18px;border:1px solid rgba(255,255,255,.78);border-radius:25px;
+        background:linear-gradient(145deg,rgba(255,255,255,.91),rgba(247,250,255,.80));box-shadow:var(--ecorp-shadow);
+        backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)
+    }
+    .lookup-container:before,.invoice-container:before{content:"";position:absolute;width:360px;height:360px;top:-220px;right:-160px;border-radius:50%;
+        background:radial-gradient(circle,rgba(37,99,235,.10),transparent 68%);pointer-events:none}
+    .lookup-container,.invoice-container{border-left:1px solid rgba(255,255,255,.8);border-right:1px solid rgba(255,255,255,.8)}
+    .lookup-header,.custom-h3{
+        min-height:78px;box-sizing:border-box;margin:0 0 18px;padding:12px 54px 12px 18px;display:flex;align-items:center;justify-content:flex-start;
+        gap:12px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.24);border-radius:18px;color:#fff;
+        background:linear-gradient(110deg,rgba(0,46,128,.94),rgba(11,95,219,.84)),
+        url("https://ecorp.edu.vn/wp-content/uploads/bg-title-hoa-don.png") center/cover no-repeat;
+        box-shadow:0 18px 34px rgba(0,46,128,.22),inset 0 1px 0 rgba(255,255,255,.24),inset 0 -14px 28px rgba(0,28,90,.12)
+    }
+    .lookup-header:after,.custom-h3:after{content:"";position:absolute;inset:auto 12% 0;height:2px;
+        background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),transparent);opacity:.75}
+    .dashboard-section-title{min-width:0;display:flex;align-items:center;gap:12px}
+    .dashboard-title-icon{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;border-radius:14px;color:#fff;font-size:1.65rem;font-weight:400;
+        background:linear-gradient(145deg,rgba(255,255,255,.25),rgba(255,255,255,.08));border:1px solid rgba(255,255,255,.24);
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 9px 20px rgba(0,0,0,.12);backdrop-filter:blur(8px)}
+    .dashboard-title-copy{min-width:0;display:flex;flex-direction:column;align-items:flex-start}
+    .dashboard-title-copy>span{color:#fff;font-size:clamp(1.05rem,2vw,1.1rem);line-height:1.1rem;font-weight:850;letter-spacing:.015em;text-shadow:0 2px 10px rgba(0,0,0,.18)}
+    .dashboard-title-copy small{margin-top:4px;color:rgba(255,255,255,.70);font-size:.68rem;font-weight:400;letter-spacing:.09em}
+    .lookup-toggle-btn{right:12px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:11px;background:rgba(255,255,255,.13);
+        border:1px solid rgba(255,255,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.15);z-index:2}
+    .lookup-toggle-btn:hover{background:rgba(255,255,255,.25);transform:translateY(-50%) scale(1.04)}
+    .search-area{padding:10px;border-radius:17px;background:linear-gradient(135deg,rgba(239,246,255,.92),rgba(255,255,255,.75));border:1px solid rgba(147,197,253,.24);box-shadow:inset 0 1px 0 rgba(255,255,255,.8)}
+    .search-area label,.info-label{color:#334b70;font-weight:700;font-size:15px !important;}
+    .search-area input,.info-grid input[type="text"],.info-grid select,.info-grid input[type="date"],.info-value{
+        border:1px solid rgba(148,163,184,.28);border-radius:11px;background:rgba(255,255,255,.82);color:#16345f;
+        box-shadow:inset 0 1px 2px rgba(15,23,42,.03),0 3px 12px rgba(30,64,175,.04);transition:border-color .2s,box-shadow .2s,transform .2s}
+    .search-area input:focus,.info-grid input:focus,.info-grid select:focus{outline:none;border-color:rgba(11,95,219,.55);box-shadow:0 0 0 4px rgba(11,95,219,.10),0 8px 22px rgba(11,95,219,.08)}
+    .info-grid input[readonly]{background:linear-gradient(135deg,#f3f7fd,#eaf1fb);color:#64748b}
+    #searchBtn,#submitInvoiceBtn{background:linear-gradient(135deg,#002e80,#0b5fdb 58%,#2563eb);box-shadow:0 9px 20px rgba(11,95,219,.22),inset 0 1px 0 rgba(255,255,255,.20)}
+    #searchBtn:hover,#submitInvoiceBtn:hover{background:linear-gradient(135deg,#003997,#0b69ef);box-shadow:0 13px 27px rgba(11,95,219,.30)}
+    #resetBtn,#clearInvoiceFormBtn{background:linear-gradient(135deg,#475569,#64748b);box-shadow:0 8px 18px rgba(71,85,105,.16)}
+    .section-header-blue,.section-header-red,.section-header-green{border-radius:13px;padding:1rem 1rem;background:linear-gradient(145deg,#f8fbff,#eaf3ff)!important;box-shadow:0 4px 20px rgba(0,46,128,.14),inset 0 1px 0 rgba(255,255,255,.18);letter-spacing:.01em}
+    .section-header-red{background:linear-gradient(135deg,#0b5fdb,#1745a6)!important}
+    .section-header-green{background:linear-gradient(135deg,#079b5b,#16b875)!important}
+    .info-value{font-weight:650;color:#193a67;background:rgba(255,255,255,.78)}
+    .money{color:#079b5b;text-shadow:0 1px 0 rgba(255,255,255,.6)}.remaining-money{color:#d64545}
+    .level-table{overflow:hidden;border-collapse:separate;border-spacing:0;border:1px solid rgba(148,163,184,.24);border-radius:15px;background:rgba(255,255,255,.78);box-shadow:0 12px 28px rgba(15,23,42,.06)}
+    .level-table th{color:#fff;background:linear-gradient(135deg,#002e80,#0b5fdb);border-color:rgba(255,255,255,.15)}
+    .level-table td{border-color:rgba(148,163,184,.18)}.level-table tbody tr:nth-child(even){background:rgba(239,246,255,.55)}
+    .level-table tbody tr:hover{background:rgba(219,234,254,.62)}
+    .payment-output-title{padding:.82rem 1rem;border-radius:14px;background:linear-gradient(135deg,#002e80,#0b5fdb 62%,#1e70ef);box-shadow:0 12px 24px rgba(0,46,128,.18),inset 0 1px 0 rgba(255,255,255,.18);letter-spacing:.02em}
+    .payment-card{border:1px solid rgba(255,255,255,.80);border-radius:18px;box-shadow:0 16px 34px rgba(15,23,42,.10),0 3px 10px rgba(0,46,128,.05);background:rgba(255,255,255,.82);backdrop-filter:blur(10px)}
+    .payment-card-header{padding:.78rem;background:linear-gradient(135deg,#002e80,#0b5fdb)!important;box-shadow:inset 0 -1px 0 rgba(255,255,255,.18);letter-spacing:.03em}
+    .qr-header{background:linear-gradient(135deg,#008c55,#16b875)!important}.invoice-link-header{background:linear-gradient(135deg,#002e80,#0b5fdb)!important}
+    .qr-content,.invoice-link-content{background:linear-gradient(145deg,rgba(255,255,255,.90),rgba(245,249,255,.76))}
+    .qr-footer{background:linear-gradient(135deg,#079b5b,#16b875);box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+    .qr-footer:hover{background:linear-gradient(135deg,#068750,#12a968)}
+    .send-invoice-link-btn{background:linear-gradient(135deg,#002e80,#0b5fdb)!important;box-shadow:0 9px 22px rgba(11,95,219,.24)}
+    #generateQrBtn{background:linear-gradient(135deg,#079b5b,#16b875);box-shadow:0 9px 22px rgba(16,185,129,.22)}
+    #submitInvoiceBtn,#clearInvoiceFormBtn,#generateQrBtn{min-height:48px;border-radius:13px;border:1px solid rgba(255,255,255,.18);font-weight:800;letter-spacing:.01em;box-shadow:0 10px 24px rgba(15,23,42,.14),inset 0 1px 0 rgba(255,255,255,.20)}
+    #submitInvoiceBtn:active,#clearInvoiceFormBtn:active,#generateQrBtn:active,#searchBtn:active,#resetBtn:active{transform:translateY(1px) scale(.99)}
+    .message{border:1px solid rgba(148,163,184,.20);box-shadow:0 8px 20px rgba(15,23,42,.05)}
+    .invoice-success-card,.invoice-check-card{border:1px solid rgba(255,255,255,.88);box-shadow:0 34px 90px rgba(0,46,128,.24),0 10px 30px rgba(15,23,42,.12)}
+    @media (max-width:1100px){
+        .ecorp-topbar{align-items:flex-start;flex-direction:column}.ecorp-status-badges{justify-content:flex-start;width:100%}
+    }
+    @media (max-width:640px){
+        body{padding:30px 10px}.ecorp-topbar{margin-bottom:12px;padding:14px;border-radius:18px}.ecorp-brand{gap:10px}
+        .ecorp-logo-wrap{width:108px;min-width:108px;height:60px}.ecorp-logo{max-width:92px;max-height:43px}
+		.ecorp-brand-divider{height:38px}.info-grid{grid-template-columns:105px 1fr}
+        .ecorp-brand-title{font-size:.92rem}.ecorp-brand-subtitle{font-size:.58rem}.ecorp-status-badges{display:none}
+        .lookup-container,.invoice-container{padding:11px;border-radius:19px}
+        .lookup-header,.custom-h3{min-height:70px;padding:10px 46px 10px 12px;border-radius:15px}
+        .dashboard-title-icon{width:38px;height:38px;flex-basis:38px;border-radius:11px;font-size:1.15rem}
+        .dashboard-title-copy>span{font-size:.95rem}.dashboard-title-copy small{font-size:.58rem}.search-area{padding:8px}
+    }
+
+
+/* ===== ECORP DASHBOARD VISUAL V3 — MATCH REFERENCE ===== */
+:root{
+  --d-navy:#002e80;
+  --d-blue:#075ee0;
+  --d-blue2:#1684ff;
+  --d-cyan:#2ba9ff;
+  --d-green:#059b61;
+  --d-bg:#eef7ff;
+  --d-line:rgba(48,125,235,.22);
+  --d-shadow:0 14px 32px rgba(0,52,145,.16),0 3px 10px rgba(25,92,190,.08);
+}
+html,body{min-height:100%}
+body{
+  margin:0;
+  padding:22px 22px;
+  color:#0f2445;
+  background:url("https://ecorp.edu.vn/wp-content/uploads/bg-hoa-don-1280p.png") center top/cover fixed no-repeat;
+  font-family: 'Inter', sans-serif;
+}
+.ecorp-topbar{
+  width:min(1400px,100%);
+  margin:0 auto 16px;
+  padding:0 8px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+}
+.ecorp-brand{gap:13px}
+.ecorp-logo-wrap{width:122px;min-width:122px;height:60px}
+.ecorp-logo{max-width:125px;max-height:60px;filter:drop-shadow(0 4px 8px rgba(0,0,0,.18))}
+.ecorp-brand-title{
+  font-size:clamp(.95rem,1.55vw,1.52rem);
+  font-weight:800;
+  letter-spacing:.01em;
+}
+.ecorp-brand-subtitle{
+  margin-top:3px;
+  font-size:.59rem;
+  letter-spacing:.09em;
+  color:rgba(255,255,255,.68);
+}
+.ecorp-status-badges{gap:7px}
+.ecorp-status{
+min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.16);border-radius:14px;
+  display:flex;align-items:center;gap:10px;background:linear-gradient(145deg,rgba(255,255,255,.12),rgba(255,255,255,.035));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 8px 18px rgba(0,0,0,.12);backdrop-filter:blur(12px)
+}
+.ecorp-status-icon{width:23px;height:23px;flex-basis:23px;border-radius:7px;font-size:.75rem}
+.ecorp-status strong{font-size:.7rem}
+.ecorp-status small{font-size:.58rem}
+
+.main-container{
+  width:min(1400px,100%);
+  max-width:none;
+  gap:15px;
+}
+
+/* Main glass panels */
+.lookup-container,.invoice-container{
+  padding:15px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.78);
+  background:linear-gradient(145deg,rgba(248,252,255,.92),rgba(226,239,255,.79));
+  box-shadow:0 20px 45px rgba(0,54,145,.20),inset 0 1px 0 rgba(255,255,255,.9);
+  backdrop-filter:blur(4px);
+}
+.lookup-container:after,.invoice-container:after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:18px;
+  pointer-events:none;
+  box-shadow:inset 0 0 0 1px rgba(70,145,240,.12);
+}
+
+/* Blue title strips — compact like reference */
+.lookup-header,.custom-h3{
+  min-height:58px;
+  margin:0 0 12px;
+  padding:9px 45px 9px 12px;
+  border-radius:11px;
+  background:
+    linear-gradient(110deg,rgba(0,46,128,.94),rgba(11,95,219,.84)),
+    url("https://ecorp.edu.vn/wp-content/uploads/bg-title-hoa-don.png") center/cover no-repeat
+  box-shadow:0 8px 18px rgba(0,69,177,.22),inset 0 1px 0 rgba(255,255,255,.28);
+}
+.lookup-header:before,.custom-h3:before{
+  content:"";
+  position:absolute;
+  inset:1px;
+  border-radius:10px;
+  background:linear-gradient(180deg,rgba(255,255,255,.10),transparent 55%);
+  pointer-events:none;
+}
+.dashboard-section-title{gap:9px}
+.dashboard-title-icon{
+  width:34px;height:34px;flex-basis:34px;
+  border-radius:9px;
+  font-size:1rem;
+  background:linear-gradient(145deg,rgba(255,255,255,.25),rgba(255,255,255,.07));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 4px 9px rgba(0,30,100,.15);
+}
+.dashboard-title-copy>span{
+  font-size:.92rem;
+  font-weight:800;
+  line-height:1.15;
+}
+.dashboard-title-copy small{
+  margin-top:2px;
+  font-size:.52rem;
+  letter-spacing:.06em;
+  opacity:.72;
+}
+.lookup-toggle-btn{
+  width:28px;height:28px;right:9px;
+  border-radius:8px;
+}
+
+/* Search */
+.search-area{
+  padding:8px;
+  border-radius:11px;
+  background:linear-gradient(135deg,rgba(242,248,255,.98),rgba(228,240,255,.88));
+  border:1px solid rgba(78,143,226,.18);
+  box-shadow:inset 0 1px 3px rgba(20,73,150,.06);
+}
+.search-area input,.info-grid input[type="text"],.info-grid select,.info-grid input[type="date"],.info-value{
+  min-height:28px;
+  border-radius:7px;
+  border:1px solid rgba(94,143,205,.18);
+  background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(240,247,255,.90));
+  box-shadow:inset 0 1px 3px rgba(17,66,130,.045);
+}
+.search-area label,.info-label{
+  color:#234c82;
+  font-weight:700;
+  font-size:.68rem;
+}
+#searchBtn{background:linear-gradient(135deg,#002e80,#0b5fdb 58%,#2563eb);box-shadow:0 9px 20px rgba(11,95,219,.22),inset 0 1px 0 rgba(255,255,255,.20)}
+#resetBtn{
+  border-radius:7px;
+}
+
+/* Section headers */
+.section-header-blue,.section-header-red,.section-header-green{
+  border-radius:8px;
+  padding:.48rem .72rem;
+  font-size:.82rem;
+  background:linear-gradient(145deg,#f8fbff,#eaf3ff)!important;
+  box-shadow:0 5px 12px rgba(0,69,177,.14),inset 0 1px 0 rgba(255,255,255,.25);
+}
+.section-header-red{background:linear-gradient(180deg,#0876ed,#0754c8)!important}
+.section-header-green{background:linear-gradient(180deg,#0aab69,#058653)!important}
+
+/* Information grids */
+.info-grid{gap:11px 9px}
+.info-label{font-size:.82rem}
+.info-value{font-size:.92rem}
+
+/* Tables */
+.level-table{
+  border-radius:10px;
+  border:1px solid rgba(72,135,214,.18);
+  box-shadow:0 8px 17px rgba(0,52,140,.08);
+}
+.level-table th{
+  color:#fff;background:linear-gradient(135deg,#002e80,#0b5fdb);border-color:rgba(255,255,255,.15);
+  font-size:.92rem;
+}
+.level-table td{font-size:.92rem}
+.level-table tbody tr:nth-child(even){background:rgba(232,242,255,.72)}
+.level-table tbody tr:hover{background:rgba(207,229,255,.72)}
+
+/* Payment area */
+.payment-output-title{
+  padding:.58rem .75rem;
+  border-radius:9px;
+  font-size:.82rem;
+  background:linear-gradient(180deg,#0b70e8,#0753c8);
+  box-shadow:0 7px 15px rgba(0,65,170,.16),inset 0 1px 0 rgba(255,255,255,.25);
+}
+.payment-card{
+  border-radius:12px;
+  border:1px solid rgba(56,135,225,.28);
+  box-shadow:0 9px 20px rgba(0,52,145,.11);
+  background:linear-gradient(145deg,rgba(255,255,255,.95),rgba(235,245,255,.88));
+}
+.payment-card-header{
+  padding:.55rem;
+  border-radius:10px 10px 0 0;
+  font-size:.67rem;
+  background:linear-gradient(180deg,#075ed6,#034ab7)!important;
+}
+.qr-header{background:linear-gradient(180deg,#08a86a,#078653)!important}
+.invoice-link-header{background:linear-gradient(180deg,#075ed6,#034ab7)!important}
+.qr-content,.invoice-link-content{
+  background:linear-gradient(145deg,rgba(255,255,255,.98),rgba(239,247,255,.92));
+}
+.qr-footer{
+  border-radius:0 0 10px 10px;
+  padding:.58rem;
+  background:linear-gradient(180deg,#0aaa69,#078c56);
+}
+.send-invoice-link-btn{
+  background:linear-gradient(180deg,#0b76f0,#0453ce)!important;
+  border-radius:8px;
+  box-shadow:0 7px 14px rgba(0,78,210,.22);
+}
+#generateQrBtn{
+  background:linear-gradient(180deg,#0aaa69,#078c56);
+  border-radius:8px;
+}
+
+/* More compact premium proportions */
+.lookup-container,.invoice-container{min-width:0}
+.lookup-container *, .invoice-container *{box-sizing:border-box}
+
+/* Mobile */
+@media (max-width:640px){
+  body{padding:24px 10px}
+  .ecorp-topbar{padding:0 3px}
+  .ecorp-status-badges{display:none}
+  .ecorp-logo-wrap{width:105px;min-width:105px}
+  .ecorp-brand-title{font-size:.84rem}
+  .ecorp-brand-subtitle{font-size:.5rem}
+  .lookup-container,.invoice-container{padding:10px;border-radius:14px}
+  .lookup-header,.custom-h3{min-height:54px;border-radius:9px}
+}
+
+    html, body, button, input, select, textarea, option, table, th, td, label {
+        font-family: 'Inter', sans-serif !important;
+    }
+    *, *::before, *::after {
+        font-family: inherit;
+    }
+
+.material-symbols-outlined {
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 26px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'liga';
+    font-variation-settings:
+        'FILL' 0,
+        'wght' 400,
+        'GRAD' 0,
+        'opsz' 24;
+}
+
+        /* Nút xem lộ trình cũ - đồng bộ với nút Tìm kiếm / Nộp hóa đơn (màu xanh), canh giữa dưới bảng khóa học */
+        .old-route-btn {
+            display: block;
+            margin: 16px auto 0;
+            min-height: 44px;
+            padding: 0.65rem 1.6rem;
+            width: fit-content;
+            background: linear-gradient(135deg,#002e80,#0b5fdb 58%,#2563eb);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,.18);
+            border-radius: 13px;
+            font-weight: 800;
+            font-size: 13px;
+            letter-spacing: .01em;
+            cursor: pointer;
+            box-shadow: 0 10px 24px rgba(15,23,42,.14), inset 0 1px 0 rgba(255,255,255,.20);
+            transition: background .2s ease, transform .1s ease, box-shadow .2s ease;
+        }
+        .old-route-btn:hover {
+            background: linear-gradient(135deg,#003997,#0b69ef);
+            box-shadow: 0 13px 27px rgba(11,95,219,.30);
+            transform: translateY(-1px);
+        }
+        .old-route-btn:active {
+            transform: translateY(1px) scale(.99);
+        }
+
+        /* Popup lộ trình cũ - dùng lại đúng bảng/font của khu vực kết quả tìm kiếm (info-grid / level-table) */
+        .old-route-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(15,23,42,.58);
+            backdrop-filter: blur(4px);
+        }
+        .old-route-modal.hidden { display: none; }
+        .old-route-dialog {
+            width: min(760px, 100%);
+            max-height: min(86vh, 900px);
+            overflow: auto;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 24px 70px rgba(0,0,0,.25);
+            padding: 22px;
+        }
+        .old-route-head {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:16px;
+        }
+        .old-route-title {
+            color:#0c4fb3;
+            font-size:18px;
+            font-weight:800;
+        }
+        .old-route-close {
+            border:0;
+            background:#f1f5f9;
+            width:34px;
+            height:34px;
+            border-radius:50%;
+            cursor:pointer;
+            font-size:20px;
+            line-height:1;
+            flex-shrink: 0;
+        }
+        /* Trong popup, .info-grid mặc định co lại 2 khối/dòng cho gọn (không đụng tới .info-grid gốc) */
+        #oldRouteContent .info-grid {
+            margin-bottom: 0;
+        }
+        #oldRouteContent .divider {
+            margin: 14px 0;
+        }
+        #oldRouteContent .level-table {
+            margin-top: 0;
+        }
+        @media (max-width: 640px) {
+            .old-route-dialog { padding:16px; }
+            #oldRouteContent .info-grid { grid-template-columns: auto 1fr; }
+        }
+</style>
+
+<style>
+/* =========================================================
+   SEARCH ACTIONS + SỬA LỘ TRÌNH ƯU ĐÃI
+   ========================================================= */
+.search-area .icon-action-btn{
+    width:40px;
+    height:40px;
+    min-width:40px;
+    flex:0 0 40px;
+    padding:0;
+    display:grid;
+    place-items:center;
+    border:1px solid rgba(255,255,255,.20);
+    border-radius:10px;
+    color:#fff;
+    cursor:pointer;
+    transition:transform .18s ease,box-shadow .18s ease,filter .18s ease;
+    box-sizing:border-box;
+}
+.search-area .icon-action-btn .material-symbols-outlined{
+    font-size:22px;
+    line-height:1;
+}
+.search-area .icon-action-btn:hover:not(:disabled){
+    transform:translateY(-1px);
+    filter:brightness(1.06);
+}
+.search-area .icon-action-btn:active:not(:disabled){
+    transform:translateY(1px) scale(.97);
+}
+.search-area .icon-action-btn:disabled{opacity:.62;cursor:wait}
+.icon-action-primary{
+    background:linear-gradient(135deg,#002e80,#0b5fdb 58%,#2563eb);
+    box-shadow:0 8px 18px rgba(11,95,219,.22),inset 0 1px 0 rgba(255,255,255,.20);
+}
+.icon-action-reset{
+    background:linear-gradient(135deg,#475569,#64748b);
+    box-shadow:0 7px 16px rgba(71,85,105,.16),inset 0 1px 0 rgba(255,255,255,.18);
+}
+.icon-action-edit{
+    background:linear-gradient(135deg,#079b5b,#16b875);
+    box-shadow:0 8px 18px rgba(16,185,129,.22),inset 0 1px 0 rgba(255,255,255,.20);
+}
+
+.edit-route-modal{
+    position:fixed;
+    inset:0;
+    z-index:9999;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:22px;
+    background:rgba(3,24,61,.58);
+    backdrop-filter:blur(8px);
+}
+.edit-route-modal.hidden{display:none}
+.edit-route-dialog{
+    width:min(900px,100%);
+    max-height:min(92vh,900px);
+    overflow:auto;
+    border:1px solid rgba(255,255,255,.82);
+    border-radius:20px;
+    background:linear-gradient(145deg,rgba(248,252,255,.98),rgba(226,239,255,.97));
+    box-shadow:0 34px 90px rgba(0,46,128,.32),0 12px 35px rgba(15,23,42,.18);
+}
+.edit-route-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    padding:16px 18px;
+    color:#fff;
+    background:linear-gradient(110deg,#002e80,#0b5fdb 68%,#2563eb);
+    border-radius:20px 20px 0 0;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.25);
+}
+.edit-route-title{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    font-size:1rem;
+    font-weight:850;
+    letter-spacing:.015em;
+}
+.edit-route-title .material-symbols-outlined{font-size:24px}
+.edit-route-subtitle{
+    margin-top:4px;
+    color:rgba(255,255,255,.76);
+    font-size:.78rem;
+    font-weight:600;
+}
+.edit-route-close{
+    width:34px;
+    height:34px;
+    flex:0 0 34px;
+    border:1px solid rgba(255,255,255,.20);
+    border-radius:10px;
+    background:rgba(255,255,255,.13);
+    color:#fff;
+    font-size:24px;
+    line-height:1;
+    cursor:pointer;
+}
+.edit-route-body{padding:18px}
+.edit-route-basic-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin-bottom:18px;
+}
+.edit-route-course-grid{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:12px;
+}
+.edit-route-field{min-width:0}
+.edit-route-field label{
+    display:block;
+    margin:0 0 6px;
+    color:#234c82;
+    font-size:.75rem;
+    font-weight:750;
+}
+.edit-route-field input,
+.edit-route-field select{
+    width:100%;
+    min-height:42px;
+    box-sizing:border-box;
+    padding:8px 11px;
+    border:1px solid rgba(148,163,184,.28);
+    border-radius:11px;
+    background:rgba(255,255,255,.82);
+    color:#16345f;
+    font-family:'Inter',sans-serif !important;
+    font-size:.86rem;
+    box-shadow:inset 0 1px 2px rgba(15,23,42,.03),0 3px 12px rgba(30,64,175,.04);
+    transition:border-color .2s,box-shadow .2s;
+}
+.edit-route-field input:focus,
+.edit-route-field select:focus{
+    outline:none;
+    border-color:rgba(11,95,219,.55);
+    box-shadow:0 0 0 4px rgba(11,95,219,.10),0 8px 22px rgba(11,95,219,.08);
+}
+.edit-route-section-label{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    margin:2px 0 10px;
+    padding:9px 11px;
+    border-radius:11px;
+    color:#0753b8;
+    background:linear-gradient(145deg,#f8fbff,#eaf3ff);
+    border:1px solid rgba(147,197,253,.22);
+    box-shadow:0 4px 14px rgba(0,46,128,.08),inset 0 1px 0 rgba(255,255,255,.85);
+    font-size:.78rem;
+    font-weight:850;
+    letter-spacing:.02em;
+}
+.edit-route-section-label .material-symbols-outlined{font-size:19px}
+.edit-route-message{
+    margin-top:14px;
+    padding:10px 12px;
+    border-radius:10px;
+    font-size:.78rem;
+    font-weight:650;
+    text-align:center;
+    background:#eff6ff;
+    color:#0753b8;
+    border:1px solid rgba(147,197,253,.30);
+}
+.edit-route-message.success{background:#dcfce7;color:#166534;border-color:#bbf7d0}
+.edit-route-message.error{background:#fef2f2;color:#991b1b;border-color:#fecaca}
+.edit-route-footer{
+    display:flex;
+    justify-content:flex-end;
+    padding:14px 18px 18px;
+}
+.edit-route-submit-btn{
+    min-height:46px;
+    padding:0 18px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    border:1px solid rgba(255,255,255,.18);
+    border-radius:13px;
+    color:#fff;
+    background:linear-gradient(135deg,#002e80,#0b5fdb 58%,#2563eb);
+    box-shadow:0 10px 24px rgba(11,95,219,.22),inset 0 1px 0 rgba(255,255,255,.20);
+    font-family:'Inter',sans-serif !important;
+    font-size:.82rem;
+    font-weight:800;
+    letter-spacing:.01em;
+    cursor:pointer;
+}
+.edit-route-submit-btn:hover:not(:disabled){filter:brightness(1.05);transform:translateY(-1px)}
+.edit-route-submit-btn:disabled{opacity:.65;cursor:wait}
+.edit-route-submit-btn .material-symbols-outlined{font-size:20px}
+
+@media (max-width:640px){
+    .search-area{flex-wrap:wrap}
+    .search-area label{flex:0 0 auto}
+    .search-area input{width:auto;flex:1 1 120px;min-width:0}
+    .search-area .icon-action-btn{width:38px;height:38px;min-width:38px;flex-basis:38px}
+    .search-area .icon-action-btn .material-symbols-outlined{font-size:21px}
+    .edit-route-modal{padding:10px}
+    .edit-route-dialog{max-height:94vh;border-radius:16px}
+    .edit-route-head{padding:14px;border-radius:16px 16px 0 0}
+    .edit-route-body{padding:13px}
+    .edit-route-basic-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+    .edit-route-course-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+    .edit-route-field label{font-size:.68rem}
+    .edit-route-field input,.edit-route-field select{min-height:39px;padding:7px 8px;font-size:.76rem}
+    .edit-route-footer{padding:11px 13px 14px}
+    .edit-route-submit-btn{width:100%}
+}
+</style>
+
+<style>
+/* =========================================================
+   XUẤT LẠI HÓA ĐƠN CŨ — NEW FEATURE
+   Chỉ thêm tính năng mới, không thay đổi các UI khác.
+   ========================================================= */
+.invoice-action-buttons{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:.45rem;
+    flex-wrap:wrap;
+}
+.invoice-action-buttons #submitInvoiceBtn{
+    margin:0;
+}
+.invoice-action-buttons #generateQrBtn{
+    margin-left:0;
+}
+.invoice-action-icon-btn{
+    width:48px;
+    height:48px;
+    min-width:48px;
+    padding:0;
+    display:inline-grid;
+    place-items:center;
+    border:1px solid rgba(255,255,255,.20);
+    border-radius:13px;
+    color:#fff;
+    background:linear-gradient(135deg,#475569,#64748b);
+    box-shadow:0 8px 18px rgba(71,85,105,.18),inset 0 1px 0 rgba(255,255,255,.20);
+    cursor:pointer;
+    transition:transform .18s ease,box-shadow .18s ease,filter .18s ease;
+}
+.invoice-action-icon-btn .material-symbols-outlined{
+    font-size:23px;
+    line-height:1;
+}
+.invoice-action-icon-btn:hover{
+    transform:translateY(-1px);
+    filter:brightness(1.06);
+    box-shadow:0 11px 22px rgba(71,85,105,.22),inset 0 1px 0 rgba(255,255,255,.20);
+}
+.invoice-action-icon-btn:active{
+    transform:translateY(1px) scale(.97);
+}
+.invoice-action-icon-btn:disabled{
+    opacity:.62;
+    cursor:not-allowed;
+    transform:none;
+}
+
+.reissue-invoice-modal{
+    position:fixed;
+    inset:0;
+    z-index:11000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:18px;
+    background:rgba(15,23,42,.54);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+}
+.reissue-invoice-modal.hidden{display:none !important;}
+.reissue-invoice-dialog{
+    width:min(760px,100%);
+    max-height:min(86vh,760px);
+    overflow:hidden;
+    position:relative;
+    border:1px solid rgba(255,255,255,.85);
+    border-radius:22px;
+    background:linear-gradient(145deg,rgba(255,255,255,.98),rgba(247,250,255,.96));
+    box-shadow:0 34px 90px rgba(0,46,128,.25),0 10px 30px rgba(15,23,42,.14);
+    animation:reissueInvoiceIn .22s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes reissueInvoiceIn{
+    from{opacity:0;transform:translateY(12px) scale(.97)}
+    to{opacity:1;transform:translateY(0) scale(1)}
+}
+.reissue-invoice-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:16px 18px;
+    color:#fff;
+    background:linear-gradient(135deg,#002e80,#0b5fdb 62%,#2563eb);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
+}
+.reissue-invoice-head-left{display:flex;align-items:center;gap:11px;min-width:0}
+.reissue-invoice-icon{
+    width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;
+    border-radius:13px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.20);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
+}
+.reissue-invoice-title{font-size:1rem;font-weight:850;letter-spacing:.02em}
+.reissue-invoice-subtitle{margin-top:3px;font-size:.68rem;color:rgba(255,255,255,.72)}
+.reissue-invoice-close{
+    width:36px;height:36px;border:0;border-radius:10px;display:grid;place-items:center;
+    color:#fff;background:rgba(255,255,255,.12);cursor:pointer;
+}
+.reissue-invoice-close:hover{background:rgba(255,255,255,.22)}
+.reissue-invoice-body{padding:18px;overflow:auto;max-height:calc(86vh - 150px)}
+.reissue-student-summary{
+    display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;
+    padding:13px 15px;margin-bottom:14px;border-radius:13px;
+    background:linear-gradient(135deg,#f8fbff,#edf5ff);
+    border:1px solid rgba(94,143,205,.20);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.8);
+}
+.reissue-student-name{color:#0f2f5d;font-size:.98rem;font-weight:850}
+.reissue-student-phone{margin-top:3px;color:#64748b;font-size:.76rem}
+.reissue-search-amount{
+    padding:7px 10px;border-radius:999px;background:#ecfdf5;border:1px solid #a7f3d0;
+    color:#047857;font-size:.72rem;font-weight:850;white-space:nowrap;
+}
+.reissue-table-wrap{overflow:auto;border:1px solid rgba(94,143,205,.20);border-radius:13px;background:#fff}
+.reissue-table{width:100%;min-width:620px;border-collapse:separate;border-spacing:0;font-size:.76rem}
+.reissue-table th{
+    padding:10px 9px;text-align:left;white-space:nowrap;color:#fff;font-weight:800;
+    background:linear-gradient(135deg,#002e80,#0b5fdb);
+}
+.reissue-table th:first-child,.reissue-table td:first-child{text-align:center;width:55px}
+.reissue-table td{padding:11px 9px;border-top:1px solid #edf2f7;color:#334155;white-space:nowrap}
+.reissue-table tbody tr:nth-child(even){background:#f8fbff}
+.reissue-table tbody tr:hover{background:#eef6ff}
+.reissue-table a{
+    display:inline-flex;align-items:center;gap:4px;color:#0b5fdb;font-weight:850;text-decoration:none;
+}
+.reissue-table a:hover{text-decoration:underline}
+.reissue-table a .material-symbols-outlined{font-size:16px}
+.reissue-pdf-missing{color:#94a3b8;font-weight:700}
+.reissue-empty{
+    padding:28px 16px;text-align:center;color:#64748b;
+}
+.reissue-empty strong{display:block;color:#334155;font-size:.9rem;margin-bottom:4px}
+.reissue-invoice-note{
+    display:flex;align-items:flex-start;gap:7px;margin-top:11px;color:#64748b;font-size:.7rem;line-height:1.5
+}
+.reissue-invoice-note .material-symbols-outlined{font-size:17px;color:#0b5fdb;flex:0 0 auto}
+.reissue-invoice-footer{
+    display:flex;justify-content:flex-end;padding:12px 18px;border-top:1px solid #e5edf7;background:rgba(248,250,252,.9)
+}
+.reissue-invoice-footer button{
+    min-height:38px;padding:0 15px;border:1px solid #d1d5db;border-radius:10px;
+    background:#fff;color:#475569;font-weight:800;cursor:pointer
+}
+.reissue-invoice-footer button:hover{background:#f8fafc}
+@media(max-width:640px){
+    .invoice-action-buttons{width:100%}
+    .invoice-action-buttons #submitInvoiceBtn{width:100%}
+    .invoice-action-buttons #generateQrBtn{flex:1 1 auto;margin-left:0}
+    .invoice-action-icon-btn{width:46px;height:46px;min-width:46px;border-radius:11px}
+    .reissue-invoice-modal{padding:10px}
+    .reissue-invoice-dialog{border-radius:17px}
+    .reissue-invoice-body{padding:13px}
+    .reissue-student-summary{grid-template-columns:1fr}
+    .reissue-search-amount{justify-self:start}
+}
+</style>
+
+    <!-- ECORP favicon / app icons -->
+    <link rel="icon" type="image/png" href="https://ecorp.edu.vn/wp-content/uploads/fav40-ecorp.png">
+    <link rel="shortcut icon" type="image/png" href="https://ecorp.edu.vn/wp-content/uploads/fav40-ecorp.png">
+    <link rel="apple-touch-icon" href="https://ecorp.edu.vn/wp-content/uploads/Logo-Ecorp-doc-trang-nen-xanh-vuong-1.png">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0C4FB3">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ECORP Hóa đơn">
+
+</head>
+<body class="ecorp-auth-pending">
+
+    <!-- ===================== MÀN HÌNH ĐĂNG NHẬP GOOGLE ===================== -->
+    <div id="ecorpLoginOverlay">
+        <div class="ecorp-login-logo-card">
+            <img src="https://ecorp.edu.vn/wp-content/uploads/cropped-Logo-Ecorp-ngang-xanh-nen-trong-suot-1-300x125-1.png" alt="ECORP">
+        </div>
+        <div class="ecorp-login-status" id="ecorpLoginStatusText">Đang xác thực tài khoản...</div>
+        <div class="ecorp-login-spinner" id="ecorpLoginSpinner"></div>
+        <div id="ecorpGsiButton"></div>
+        <div class="ecorp-login-error" id="ecorpLoginError"></div>
+    </div>
+
+    <script>
+        // ================================================================
+        // ECORP AUTH: Đăng nhập bằng Google Identity Services (GIS)
+        // ----------------------------------------------------------------
+        // - Không dùng Session.getActiveUser() phía Apps Script (không ổn
+        //   định với tài khoản Gmail ngoài domain của người sở hữu script).
+        // - Trình duyệt tự xác thực với Google -> trả về 1 ID token đã ký
+        //   -> gửi lên loginWithGoogle() để server tự verify + đối chiếu DSNS.
+        // - Web App deploy dạng "Execute as: Me" nên người dùng cuối
+        //   KHÔNG BAO GIỜ cần được chia sẻ trực tiếp Spreadsheet/Drive.
+        // ================================================================
+
+        const ECORP_API_URL = '/api/';
+
+        async function ecorpApi(action, payload) {
+            const response = await fetch(ECORP_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action, payload: payload || {} })
+            });
+            const text = await response.text();
+            let data;
+            try { data = text ? JSON.parse(text) : null; }
+            catch (e) { throw new Error('Phản hồi API không hợp lệ.'); }
+            if (!response.ok) throw new Error((data && data.message) || ('API HTTP ' + response.status));
+            return data;
+        }
+
+        function ecorpApiErrorText(error) {
+            return error && error.message ? error.message : String(error || 'Không rõ lỗi.');
+        }
+
+        window.ecorpSession = null;
+
+        function getEcorpSessionToken() {
+            return (window.ecorpSession && window.ecorpSession.sessionToken) || '';
+        }
+
+        function initEcorpAuth() {
+            var savedRaw = null;
+            try { savedRaw = sessionStorage.getItem('ecorpSession'); } catch (e) { /* Chế độ ẩn danh có thể chặn sessionStorage */ }
+
+            if (savedRaw) {
+                try {
+                    var saved = JSON.parse(savedRaw);
+                    if (saved && saved.token) {
+                        ecorpApi('checkSession', { sessionToken: saved.token })
+                            .then(function (res) {
+                                if (res && res.status === 'OK') { applyEcorpSession(res); return; }
+                                try { sessionStorage.removeItem('ecorpSession'); } catch (e) {}
+                                startGoogleSignIn();
+                            })
+                            .catch(function () {
+                                try { sessionStorage.removeItem('ecorpSession'); } catch (e) {}
+                                startGoogleSignIn();
+                            });
+                        return;
+                    }
+                } catch (e) { /* dữ liệu lưu bị hỏng -> đăng nhập lại bình thường */ }
+            }
+
+            startGoogleSignIn();
+        }
+
+        function startGoogleSignIn() {
+            if (!window.google || !google.accounts || !google.accounts.id) {
+                // Thư viện GIS chưa sẵn sàng, thử lại sau một nhịp ngắn.
+                setTimeout(startGoogleSignIn, 300);
+                return;
+            }
+
+            setEcorpLoginStatus('Đang xác thực tài khoản...', true);
+
+            google.accounts.id.initialize({
+                client_id: '221084661808-ucuarkm93ggdbp3glfvc9nu1uje7cqpc.apps.googleusercontent.com',
+                callback: handleEcorpCredentialResponse,
+                auto_select: true,
+                cancel_on_tap_outside: false
+            });
+
+            // Luôn hiện sẵn nút "Sign in with Google" làm phương án dự phòng,
+            // phòng khi One Tap bị trình duyệt chặn hoặc người dùng đã tắt trước đó.
+            google.accounts.id.renderButton(
+                document.getElementById('ecorpGsiButton'),
+                { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'signin_with', width: 260 }
+            );
+
+            // One Tap: nếu trình duyệt còn nhớ tài khoản Google đã dùng, sẽ tự hiện
+            // khung chọn tài khoản (giống ảnh mẫu) và có thể tự đăng nhập không cần bấm gì thêm.
+            google.accounts.id.prompt();
+        }
+
+        function handleEcorpCredentialResponse(response) {
+            setEcorpLoginStatus('Đang xác thực tài khoản...', true);
+
+            ecorpApi('loginWithGoogle', { idToken: response.credential })
+                .then(function (result) {
+                    if (!result) { showEcorpLoginError('Không nhận được phản hồi từ hệ thống.'); return; }
+                    if (result.status === 'OK') { applyEcorpSession(result); return; }
+                    if (result.status === 'DENIED') { showEcorpLoginError(result.message || 'Tài khoản chưa được cấp quyền truy cập.'); return; }
+                    showEcorpLoginError(result.message || 'Đăng nhập thất bại.');
+                })
+                .catch(function (error) {
+                    showEcorpLoginError('Lỗi hệ thống khi đăng nhập: ' + ecorpApiErrorText(error));
+                });
+        }
+
+        function applyEcorpSession(session) {
+            window.ecorpSession = session;
+            try { sessionStorage.setItem('ecorpSession', JSON.stringify({ token: session.sessionToken })); } catch (e) {}
+
+            document.body.classList.remove('ecorp-auth-pending');
+            var overlay = document.getElementById('ecorpLoginOverlay');
+            if (overlay) overlay.classList.add('hidden');
+
+            var nguoiXuatEl = document.getElementById('inv_nguoiXuatHD');
+            if (nguoiXuatEl) nguoiXuatEl.value = (session.maNV || '') + ' - ' + (session.hoTen || '');
+
+        }
+
+        function showEcorpLoginError(message) {
+            setEcorpLoginStatus('Không thể đăng nhập', false);
+            var errEl = document.getElementById('ecorpLoginError');
+            if (errEl) { errEl.textContent = message; errEl.classList.add('visible'); }
+        }
+
+        function setEcorpLoginStatus(text, showSpinner) {
+            var statusEl = document.getElementById('ecorpLoginStatusText');
+            var spinnerEl = document.getElementById('ecorpLoginSpinner');
+            var errEl = document.getElementById('ecorpLoginError');
+            if (statusEl) statusEl.textContent = text;
+            if (spinnerEl) spinnerEl.style.display = showSpinner ? 'block' : 'none';
+            if (errEl) errEl.classList.remove('visible');
+        }
+
+        if (window.__ecorpGisReady) {
+            initEcorpAuth();
+        } else {
+            window.__ecorpInitAuthWhenReady = initEcorpAuth;
+        }
+    </script>
+
+    <header class="ecorp-topbar">
+        <div class="ecorp-brand">
+            <div class="ecorp-logo-wrap">
+                <img src="https://ecorp.edu.vn/wp-content/uploads/logo-trang-ngang-khong-nen.png"
+                     alt="ECORP" class="ecorp-logo">
+            </div>
+			 <div class="ecorp-brand-divider"></div>
+            <div class="ecorp-brand-copy">
+                <div class="ecorp-brand-title">XUẤT HÓA ĐƠN ĐIỆN TỬ</div>
+                <div class="ecorp-brand-subtitle">e-Invoice Management System</div>
+            </div>
+        </div>
+        <div class="ecorp-status-badges">
+            <div class="ecorp-status"><span class="ecorp-status-icon">✓</span><div><strong>ecorp.edu.vn</strong><small>Website</small></div></div>
+            <div class="ecorp-status"><span class="ecorp-status-icon">◷</span><div><strong>Quản trị số</strong><small>24/7</small></div></div>
+            <div class="ecorp-status"><span class="ecorp-status-icon">◆</span><div><strong>Bảo mật cao</strong><small>Enterprise Grade</small></div></div>
+        </div>
+    </header>
+
+    <div class="main-container">
+        
+        <!-- Cột TRÁI: TRA CỨU THÔNG TIN HỌC VIÊN -->
+        <div class="lookup-container">
+            <div class="lookup-header">
+                <div class="dashboard-section-title">
+                    <span class="dashboard-title-icon material-symbols-outlined">school</span>
+                    <span class="dashboard-title-copy">
+                        <span>TRA CỨU THÔNG TIN HỌC VIÊN</span>
+                        <small>Student Information Lookup</small>
+                    </span>
+                </div>
+                <button type="button" id="toggleLookupBtn" class="lookup-toggle-btn" onclick="toggleLookupSection()" title="Thu gọn / Mở rộng">▲</button>
+            </div>
+
+            <div id="lookupBody">
+            <div class="search-area">
+                <label for="phoneNumber">Số điện thoại:</label>
+                <input type="text" id="phoneNumber" placeholder="" maxlength="15">
+                <button id="searchBtn" class="icon-action-btn icon-action-primary" type="button" title="Tìm kiếm" aria-label="Tìm kiếm">
+                    <span class="material-symbols-outlined">search_check_2</span>
+                </button>
+                <button id="resetBtn" class="icon-action-btn icon-action-reset" type="button" title="Đặt lại" aria-label="Đặt lại">
+                    <span class="material-symbols-outlined">restart_alt</span>
+                </button>
+                <button id="editRouteBtn" class="icon-action-btn icon-action-edit" type="button" title="Cập nhật lộ trình" aria-label="Cập nhật lộ trình">
+                    <span class="material-symbols-outlined">edit_document</span>
+                </button>
+            </div>
+
+            <div id="messageArea" class="message hidden" style="background-color: #fef3c7; color: #92400e;"></div>
+
+            <div id="studentInfo" class="hidden">
+                <div class="info-grid">
+                    <div class="info-label">Họ và tên</div>
+                    <div class="info-value" id="hoTen"></div>
+                    <div class="info-label">Số điện thoại</div>
+                    <div class="info-value" id="sdt"></div>
+                    
+                    <div class="info-label">Cơ sở học</div>
+                    <div class="info-value" id="coSo"></div>
+                    <div class="info-label">Mã Tư vấn</div>
+                    <div class="info-value" id="maTV"></div>
+                    
+                    <div class="info-label">Tổng học phí</div>
+                    <div class="info-value money" id="tongHP"></div>
+                    <div class="info-label">Học phí đã đóng</div>
+                    <div class="info-value money" id="hpDaDong"></div>
+
+                    <div class="info-label">Còn thiếu</div>
+                    <div class="info-value remaining-money" id="conLai"></div>
+                    <div class="info-label">Tổng số khóa</div>
+                    <div class="info-value" id="tongSoKhoa"></div>
+                    
+                    <div class="info-label">Mã Ưu đãi 1</div>
+                    <div class="info-value" id="maUuDai1"></div>
+                    <div class="info-label">Ưu đãi 1</div>
+                    <div class="info-value" id="uuDai1"></div>
+
+                    <div class="info-label">Giải trình Ưu đãi 2</div>
+                    <div class="info-value" id="gtUuDai2"></div>
+                    <div class="info-label">Số tiền Ưu đãi 2</div>
+                    <div class="info-value" id="uuDai2"></div>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <table class="level-table">
+                    <thead>
+                        <tr>
+                            <th>Khóa học</th>
+                            <th>Số tiền đã đóng</th>
+                            <th>Còn lại</th>
+                        </tr>
+                    </thead>
+                    <tbody id="levelsTableBody">
+                        <!-- Dữ liệu khóa học sẽ được thêm tại đây -->
+                    </tbody>
+                </table>
+            </div>
+            </div>
+
+            <!-- KHU VỰC QR + LINK HÓA ĐƠN -->
+            <div id="paymentOutputSection" class="payment-output-section hidden">
+                <div class="payment-output-title">THANH TOÁN &amp; HÓA ĐƠN</div>
+
+                <div class="payment-output-grid">
+                    <div class="payment-card qr-card">
+                        <div class="payment-card-header qr-header">ẢNH QR CODE</div>
+                        <div class="qr-content">
+                            <div id="qrLoading" class="qr-loading hidden">Đang tạo QR Code...</div>
+                            <img id="paymentQrImage" class="payment-qr-image hidden" src="" alt="QR Code thanh toán">
+                            <div id="qrEmptyState" class="qr-loading">QR Code sẽ xuất hiện sau khi bấm “XUẤT QR CODE”.</div>
+                            <div id="qrPaymentInfo" class="qr-payment-info hidden"></div>
+                        </div>
+                        <div class="qr-footer" onclick="openQrImage()" title="Mở QR Code trong tab mới">NHẤN VÀO ĐÂY ĐỂ MỞ QR</div>
+                    </div>
+
+                    <div class="payment-card invoice-link-card">
+                        <div class="payment-card-header invoice-link-header">TẠO PDF HÓA ĐƠN</div>
+                        <div class="invoice-link-content">
+                            <div id="invoiceCheckStatus" class="invoice-check-status"></div>
+							<div id="pdfSaoKeResult" class="pdf-sao-ke-result hidden"></div>
+                            <button type="button" id="checkSaoKeBtn" class="send-invoice-link-btn" onclick="checkSaoKe()" disabled>CHECK SAO KÊ</button>
+                            <button type="button" id="taoPdfSaoKeBtn" class="send-invoice-link-btn" onclick="taoPdfSaoKe()">XUẤT PDF HÓA ĐƠN</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+        
+        <!-- Cột PHẢI: HÓA ĐƠN ĐIỆN TỬ -->
+        <div class="invoice-container">
+            <h3 class="custom-h3">
+                <span class="dashboard-title-icon material-symbols-outlined">receipt</span>
+                <span class="dashboard-title-copy">
+                    <span>TẠO HÓA ĐƠN ĐIỆN TỬ</span>
+                    <small>Create e-Invoice</small>
+                </span>
+            </h3>
+
+            <div class="info-grid">
+
+                <div class="section-header-blue">APPLICANT INFORMATION / HỌC VIÊN</div>
+
+                <div class="info-label">Họ tên</div>
+                <input type="text" class="info-value" id="inv_hoTen" placeholder="">
+                <div class="info-label">Số điện thoại</div>
+                <input type="text" class="info-value" id="inv_sdt" placeholder="">
+
+                <div class="info-label">Cơ sở thu</div>
+                <input type="text" class="info-value" id="inv_coSo" placeholder="">
+                <div class="info-label">Hợp đồng</div>
+                <select class="info-value" id="inv_hopDong">
+                    <option value="">Chọn</option>
+                    <option value="Thiếu hợp đồng">Thiếu hợp đồng</option>
+                    <option value="Thiếu hóa đơn">Thiếu hóa đơn</option>
+                    <option value="Thiếu cả 2">Thiếu cả 2</option>
+                    <option value="Đủ">Đủ</option>
+                </select>
+
+                <div class="info-label">Phân loại</div>
+                <select class="info-value" id="inv_phanLoai">
+                    <option value="Cơ sở">Cơ sở</option>
+                    <option value="TG">TG</option>
+                    <option value="Hóa đơn cũ">Hóa đơn cũ</option>
+                    <option value="T">T</option>
+                    <option value="TE">TE</option>
+                    <option value="Chuyển dưới 100k">Chuyển dưới 100k</option>
+                    <option value="VCB">VCB</option>
+                    <option value="CK nội dung khác">CK nội dung khác</option>
+                    <option value="TGT">TGT</option>
+                </select>
+                <div class="info-label">Ghi chú</div>
+                <input type="text" class="info-value" id="inv_ghiChu" placeholder="">
+
+                <div class="info-label">Người xuất HĐ</div>
+                <input type="text" class="info-value" id="inv_nguoiXuatHD" value="" readonly placeholder="">
+
+                <div class="info-label">Ngày CK</div>
+                <input type="date" class="info-value" id="inv_ngayGD">
+
+                <div class="section-header-blue">ACTUAL RECEIPTS / HỌC PHÍ</div>
+
+                <div class="info-label">Tổng HP đóng</div>
+                <input type="text" class="info-value" id="inv_tongHPDong" placeholder="" oninput="formatCurrencyInput(this)" onchange="calculatePaymentsAndText()">
+                <div class="info-label">Giữ ưu đãi</div>
+                <select class="info-value" id="inv_giuUuDai" onchange="calculatePaymentsAndText()">
+                    <option value="Đóng học phí">Đóng học phí</option>
+                    <option value="Đặt cọc">Đặt cọc</option>
+                    <option value="Đóng full">Đóng full</option>
+                </select>
+
+                <div class="info-label">Đóng HP 1</div>
+                <input type="text" class="info-value bg-gray-200" id="inv_hp1" readonly>
+                <div class="info-label">Đóng HP 2</div>
+                <input type="text" class="info-value bg-gray-200" id="inv_hp2" readonly>
+                <div class="info-label">Đóng HP 3</div>
+                <input type="text" class="info-value bg-gray-200" id="inv_hp3" readonly>
+                <div class="info-label">Đóng HP 4</div>
+                <input type="text" class="info-value bg-gray-200" id="inv_hp4" readonly>
+                <div class="info-label">Đóng HP 5</div>
+                <input type="text" class="info-value bg-gray-200" id="inv_hp5" readonly>
+                <div class="info-label">Đóng HP 6</div>
+                <input type="text" class="info-value bg-gray-200" id="inv_hp6" readonly>
+                <div class="info-label">Đóng HP 7</div>
+                <input type="text" class="info-value bg-gray-200" id="inv_hp7" readonly>
+                <div class="info-label">Đóng HP 8</div>
+                <input type="text" class="info-value bg-gray-200" id="inv_hp8" readonly>
+                <div class="info-label">Đóng HP 9</div>
+                <input type="text" class="info-value bg-gray-200" id="inv_hp9" readonly>
+                <div class="info-label">Đóng HP 10</div>
+                <input type="text" class="info-value bg-gray-200" id="inv_hp10" readonly>
+
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="text-center mt-6 invoice-action-buttons">
+                <button id="submitInvoiceBtn">NỘP HÓA ĐƠN</button>
+                <button id="generateQrBtn" type="button" onclick="generatePaymentQRCode()">XUẤT QR CODE</button>
+                <button id="reissueInvoiceBtn" type="button" class="invoice-action-icon-btn"
+                        title="Xuất lại hóa đơn cũ" aria-label="Xuất lại hóa đơn cũ">
+                    <span class="material-symbols-outlined">history</span>
+                </button>
+            </div>
+
+            <div id="invoiceMessage" class="message hidden"></div>
+
+            <div id="invoiceSuccessModal" class="invoice-success-modal hidden" role="dialog" aria-modal="true" aria-labelledby="invoiceSuccessTitle">
+                <div class="invoice-success-card">
+                    <div class="invoice-success-icon" aria-hidden="true">✓</div>
+                    <h2 id="invoiceSuccessTitle" class="invoice-success-title">Hóa đơn đã được gửi lên hệ thống</h2>
+                    <p class="invoice-success-message"><strong>Vui lòng Check Sao kê để in hóa đơn.</strong></p>
+                    <div id="invoiceSuccessId" class="invoice-success-id hidden"></div>
+                    <button type="button" class="invoice-success-close" onclick="closeInvoiceSuccessModal()">ĐÃ HIỂU</button>
+                </div>
+            </div>
+
+            <div id="invoiceCheckModal" class="invoice-check-modal hidden" role="dialog" aria-modal="true" aria-labelledby="invoiceCheckTitle">
+                <div class="invoice-check-card">
+                    <div class="invoice-check-head">
+                        <div id="invoiceCheckIcon" class="invoice-check-icon" aria-hidden="true">✓</div>
+                        <div>
+                            <h2 id="invoiceCheckTitle" class="invoice-check-title">CHECK SAO KÊ</h2>
+                            <p id="invoiceCheckSubtitle" class="invoice-check-subtitle">Kết quả đối soát giao dịch.</p>
+                        </div>
+                    </div>
+                    <div id="invoiceCheckResult" class="invoice-check-result">
+                        <div id="invoiceCheckResultTitle" class="invoice-check-result-title"></div>
+                        <div id="invoiceCheckReason" class="invoice-check-reason"></div>
+                        <ul id="invoiceCheckSteps" class="invoice-check-steps"></ul>
+                    </div>
+                    <button type="button" class="invoice-check-close" onclick="closeInvoiceCheckModal()">ĐÓNG</button>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+<script>
+    // --- KHU VỰC HÀM TIỆN ÍCH ---
+
+    // Hàm định dạng số thành tiền tệ (vd: 1234567 -> 1.234.567 VNĐ)
+    function formatCurrency(number) {
+        if (typeof number !== 'number') {
+            number = parseFloat(number);
+        }
+        if (isNaN(number)) {
+            return '';
+        }
+        // Sử dụng 'vi-VN' và thay dấu phẩy thành dấu chấm
+        return number.toLocaleString('vi-VN').replace(/,/g, '.');
+    }
+
+    // Hàm định dạng số khi nhập vào ô input (Tổng HP đóng)
+    function formatCurrencyInput(input) {
+        let value = input.value.replace(/\./g, ''); // Loại bỏ dấu chấm
+        let num = parseFloat(value);
+        if (isNaN(num)) {
+            input.value = '';
+        } else {
+            input.value = formatCurrency(num);
+        }
+    }
+
+    // Hàm lấy giá trị số nguyên từ input đã định dạng tiền tệ
+    function getNumericValue(value) {
+        return parseFloat(String(value).replace(/\./g, '')) || 0;
+    }
+
+    // --- LOGIC HÓA ĐƠN BÊN PHẢI ---
+
+    // Lưu trữ dữ liệu học viên để dùng cho tính toán
+    let currentStudentData = {}; 
+    let levelCountX = 0; // Số lượng khóa học (X)
+
+    // Hàm xóa form Hóa đơn
+    function clearInvoiceForm() {
+        document.getElementById('inv_hoTen').value = '';
+        document.getElementById('inv_sdt').value = '';
+        document.getElementById('inv_coSo').value = '';
+        document.getElementById('inv_hopDong').selectedIndex = 0;
+        document.getElementById('inv_phanLoai').value = 'Cơ sở';
+        document.getElementById('inv_ghiChu').value = '';
+
+        document.getElementById('inv_phanLoai').value = 'Cơ sở';
+        const sessionUser = window.ecorpSession;
+        document.getElementById('inv_nguoiXuatHD').value = sessionUser
+            ? ((sessionUser.maNV || '') + ' - ' + (sessionUser.hoTen || ''))
+            : '';
+        const ngayGDInput = document.getElementById('inv_ngayGD');
+        if (ngayGDInput) ngayGDInput.valueAsDate = new Date();
+
+        document.getElementById('inv_tongHPDong').value = '';
+        document.getElementById('inv_giuUuDai').selectedIndex = 0;
+        document.getElementById('inv_hp1').value = '';
+        document.getElementById('inv_hp2').value = '';
+        document.getElementById('inv_hp3').value = '';
+        document.getElementById('inv_hp4').value = '';
+        document.getElementById('inv_hp5').value = '';
+        document.getElementById('inv_hp6').value = '';
+        document.getElementById('inv_hp7').value = '';
+        document.getElementById('inv_hp8').value = '';
+        document.getElementById('inv_hp9').value = '';
+        document.getElementById('inv_hp10').value = '';
+
+        document.getElementById('invoiceMessage').classList.add('hidden');
+
+        lastInvoiceRowId = null;
+        lastInvoiceCheckSnapshot = null;
+        lastMatchedInvoiceRow = null;
+        const checkBtnReset = document.getElementById('checkSaoKeBtn');
+        const checkStatusReset = document.getElementById('invoiceCheckStatus');
+        if (checkBtnReset) checkBtnReset.disabled = true;
+        if (checkStatusReset) checkStatusReset.textContent = '';
+        const pdfBtnReset = document.getElementById('taoPdfSaoKeBtn');
+        const pdfResultReset = document.getElementById('pdfSaoKeResult');
+        if (pdfBtnReset) { pdfBtnReset.classList.remove('hidden'); pdfBtnReset.disabled = false; pdfBtnReset.textContent = 'XUẤT PDF HÓA ĐƠN'; }
+        if (pdfResultReset) { pdfResultReset.classList.add('hidden'); pdfResultReset.innerHTML = ''; pdfResultReset.classList.remove('error'); }
+
+        // Xóa QR cũ để QR luôn khớp với hóa đơn đang thao tác.
+        const qrSection = document.getElementById('paymentOutputSection');
+        const qrImage = document.getElementById('paymentQrImage');
+        const qrInfo = document.getElementById('qrPaymentInfo');
+        const qrEmptyState = document.getElementById('qrEmptyState');
+        const qrLoading = document.getElementById('qrLoading');
+
+        if (qrSection) qrSection.classList.add('hidden');
+        if (qrImage) {
+            qrImage.src = '';
+            qrImage.dataset.qrUrl = '';
+            qrImage.classList.add('hidden');
+        }
+        if (qrInfo) {
+            qrInfo.textContent = '';
+            qrInfo.classList.add('hidden');
+        }
+        if (qrLoading) qrLoading.classList.add('hidden');
+        if (qrEmptyState) qrEmptyState.classList.remove('hidden');
+    }
+
+    // Hàm chính tính toán HP 1-10 và Bằng chữ
+// Logic:
+// 1. Đặt cọc      → toàn bộ tiền vào HP1
+// 2. Đóng học phí → giữ nguyên logic phân bổ hiện tại
+// 3. Đóng full    → đóng lần lượt HP1 → HP10 theo số tiền còn thiếu
+function calculatePaymentsAndText() {
+
+    const tongHPDongInput =
+        document.getElementById('inv_tongHPDong');
+
+    const giuUuDai =
+        document.getElementById('inv_giuUuDai').value;
+
+    const totalHP =
+        getNumericValue(tongHPDongInput.value);
+
+    const hpInputs =
+        Array.from(
+            { length: 10 },
+            (_, i) =>
+                document.getElementById(`inv_hp${i + 1}`)
+        );
+
+    let finalTotalPayment = 0;
+
+
+    // =========================================================
+    // RESET TẤT CẢ HP1 → HP10
+    // =========================================================
+
+    hpInputs.forEach(input => {
+        input.value = '';
+    });
+
+
+    // =========================================================
+    // KHÔNG CÓ TIỀN → XÓA BẰNG CHỮ
+    // =========================================================
+
+    if (totalHP <= 0) {
+
+        return;
+    }
+
+
+    // =========================================================
+    // TRƯỜNG HỢP 1: ĐẶT CỌC
+    // =========================================================
+    // Toàn bộ số tiền khách đóng đưa vào HP1.
+    //
+    // Ví dụ:
+    // Tổng HP đóng = 5.000.000
+    //
+    // HP1  = 5.000.000
+    // HP2  = -
+    // HP3  = -
+    // ...
+    // =========================================================
+
+    if (giuUuDai === 'Đặt cọc') {
+
+        hpInputs[0].value =
+            formatCurrency(totalHP);
+
+        finalTotalPayment =
+            totalHP;
+    }
+
+
+    // =========================================================
+    // TRƯỜNG HỢP 2: ĐÓNG HỌC PHÍ
+    // =========================================================
+    // GIỮ NGUYÊN LOGIC HIỆN TẠI CỦA BẠN
+    // =========================================================
+
+    else if (giuUuDai === 'Đóng học phí') {
+
+        const levels =
+            currentStudentData.levels || [];
+
+        let remainingPaymentToDistribute =
+            totalHP;
+
+        let paymentsDistributed = [];
+
+
+        for (let i = 0; i < 10; i++) {
+
+            let dongHP_N = 0;
+
+
+            // Số khóa còn thiếu tiền
+            // tính từ khóa hiện tại trở đi.
+            const remainingCourseCount =
+                (currentStudentData.levels || [])
+                    .slice(i)
+                    .filter(
+                        level =>
+                            Number(level.conLai) > 0
+                    )
+                    .length;
+
+
+            // Số tiền còn thiếu của khóa hiện tại
+            const conLaiKhoaN =
+                (
+                    currentStudentData.levels &&
+                    currentStudentData.levels[i]
+                )
+                    ? Number(
+                        currentStudentData.levels[i].conLai
+                    ) || 0
+                    : 0;
+
+
+            if (
+                remainingCourseCount > 0 &&
+                remainingPaymentToDistribute > 0 &&
+                conLaiKhoaN > 0
+            ) {
+
+                const T_N =
+                    Math.round(
+                        remainingPaymentToDistribute /
+                        remainingCourseCount
+                    );
+
+                dongHP_N =
+                    Math.min(
+                        T_N,
+                        conLaiKhoaN
+                    );
+
+                remainingPaymentToDistribute -=
+                    dongHP_N;
+            }
+
+
+            paymentsDistributed.push(
+                dongHP_N
+            );
+
+
+            hpInputs[i].value =
+                dongHP_N > 0
+                    ? formatCurrency(dongHP_N)
+                    : '';
+        }
+
+
+        // =====================================================
+        // XỬ LÝ SAI SỐ DO LÀM TRÒN
+        // =====================================================
+
+        const roundingDifference =
+            totalHP -
+            paymentsDistributed.reduce(
+                (a, b) => a + b,
+                0
+            );
+
+
+        if (
+            Math.abs(roundingDifference) > 0
+        ) {
+
+            for (let i = 9; i >= 0; i--) {
+
+                const conLai =
+                    (
+                        currentStudentData.levels &&
+                        currentStudentData.levels[i]
+                    )
+                        ? Number(
+                            currentStudentData.levels[i].conLai
+                        ) || 0
+                        : 0;
+
+
+                if (conLai > 0) {
+
+                    const newValue =
+                        paymentsDistributed[i] +
+                        roundingDifference;
+
+
+                    if (
+                        newValue >= 0 &&
+                        newValue <= conLai
+                    ) {
+
+                        paymentsDistributed[i] =
+                            newValue;
+
+                        hpInputs[i].value =
+                            newValue > 0
+                                ? formatCurrency(newValue)
+                                : '';
+                    }
+
+                    break;
+                }
+            }
+        }
+
+
+        finalTotalPayment =
+            totalHP;
+    }
+
+
+    // =========================================================
+    // TRƯỜNG HỢP 3: ĐÓNG FULL
+    // =========================================================
+    //
+    // LOGIC:
+    //
+    // Tiền chưa đủ HP1
+    //      ↓
+    // TẤT CẢ tiền → HP1
+    //
+    // Tiền đủ HP1
+    //      ↓
+    // Phần còn thừa → HP2
+    //
+    // Tiền đủ HP2
+    //      ↓
+    // Phần còn thừa → HP3
+    //
+    // ...
+    //
+    // Không bao giờ vượt quá "conLai" của từng HP.
+    // =========================================================
+
+    else if (giuUuDai === 'Đóng full') {
+
+        const levels =
+            currentStudentData.levels || [];
+
+        let remainingPayment =
+            totalHP;
+
+        let totalActuallyDistributed =
+            0;
+
+
+        // =====================================================
+        // PHÂN BỔ TUẦN TỰ HP1 → HP10
+        // =====================================================
+
+        for (let i = 0; i < 10; i++) {
+
+            // Nếu đã dùng hết tiền thì dừng.
+            if (remainingPayment <= 0) {
+                break;
+            }
+
+
+            // Lấy số tiền còn thiếu của HP hiện tại.
+            const conLai =
+                levels[i]
+                    ? Number(levels[i].conLai) || 0
+                    : 0;
+
+
+            // HP này đã đóng đủ → bỏ qua.
+            if (conLai <= 0) {
+                continue;
+            }
+
+
+            // =================================================
+            // Số tiền đưa vào HP hiện tại
+            //
+            // Không được vượt quá:
+            // - số tiền khách còn muốn đóng
+            // - số tiền HP hiện tại còn thiếu
+            // =================================================
+
+            const dongHP =
+                Math.min(
+                    remainingPayment,
+                    conLai
+                );
+
+
+            if (dongHP > 0) {
+
+                hpInputs[i].value =
+                    formatCurrency(dongHP);
+
+                remainingPayment -=
+                    dongHP;
+
+                totalActuallyDistributed +=
+                    dongHP;
+            }
+        }
+
+
+        // =====================================================
+        // TỔNG THỰC TẾ ĐÃ PHÂN BỔ
+        // =====================================================
+        //
+        // Nếu khách đóng đủ hoặc thấp hơn tổng còn thiếu:
+        //
+        // finalTotalPayment = số tiền khách đóng
+        //
+        // Nếu khách nhập vượt quá tổng học phí còn thiếu:
+        //
+        // finalTotalPayment = tổng thực tế có thể phân bổ
+        //
+        // Như vậy không xuất hóa đơn với số tiền lớn hơn
+        // số học phí thực tế còn thiếu.
+        // =====================================================
+
+        finalTotalPayment =
+            totalActuallyDistributed;
+    }
+
+
+    // =========================================================
+    // KHÔNG CHỌN LOẠI
+    // =========================================================
+
+    else {
+
+        // Chưa chọn:
+        // không phân bổ HP.
+        finalTotalPayment = 0;
+    }
+
+
+    // Tổng tiền nhập và HP1-HP10 chỉ dùng cho logic/đối chiếu.
+    // Không còn hiển thị "Bằng chữ" và không gửi trường này lên Sheet.
+    }
+
+    // =========================================================
+    // LỘ TRÌNH CŨ
+    // =========================================================
+
+    function escapeOldRouteHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function renderOldRouteButton(data) {
+        const infoDiv = document.getElementById('studentInfo');
+        if (!infoDiv) return;
+
+        const oldButton = document.getElementById('oldRouteBtn');
+        if (oldButton) oldButton.remove();
+
+        if (!data || !data.hasOldRecord || !data.oldRecord) return;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = 'oldRouteBtn';
+        btn.className = 'old-route-btn';
+        btn.textContent = 'XEM LỘ TRÌNH CŨ';
+        btn.addEventListener('click', function () {
+            openOldRouteModal(data.oldRecord);
+        });
+
+        infoDiv.appendChild(btn);
+    }
+
+    function openOldRouteModal(oldRecord) {
+        if (!oldRecord) return;
+
+        let modal = document.getElementById('oldRouteModal');
+
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'oldRouteModal';
+            modal.className = 'old-route-modal hidden';
+            modal.innerHTML = `
+                <div class="old-route-dialog" role="dialog" aria-modal="true" aria-labelledby="oldRouteTitle">
+                    <div class="old-route-head">
+                        <div class="old-route-title" id="oldRouteTitle">LỘ TRÌNH CŨ CỦA HỌC VIÊN</div>
+                        <button type="button" class="old-route-close" aria-label="Đóng">×</button>
+                    </div>
+                    <div id="oldRouteContent"></div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            modal.querySelector('.old-route-close').addEventListener('click', function () {
+                modal.classList.add('hidden');
+            });
+
+            modal.addEventListener('click', function (event) {
+                if (event.target === modal) {
+                    modal.classList.add('hidden');
+                }
+            });
+        }
+
+        const money = value => formatCurrency(Number(value) || 0);
+        const r = oldRecord;
+        const levels = (r.levels || []).filter(level => level.khoaHoc);
+
+        // Bảng khóa học trong popup dùng đúng class "level-table" (giống bảng kết quả tìm kiếm)
+        // và chỉ gồm 3 cột: Khóa học - Số tiền đã đóng - Còn lại (bỏ cột Học phí).
+        const levelRows = levels.length
+            ? levels.map(level => `
+                <tr>
+                    <td>${escapeOldRouteHtml(level.khoaHoc)}</td>
+                    <td class="money">${money(level.soTienDaDong)}</td>
+                    <td class="remaining-money">${money(level.conLai)}</td>
+                </tr>
+            `).join('')
+            : `<tr><td colspan="3">Không có khóa học nào được ghi nhận.</td></tr>`;
+
+        document.getElementById('oldRouteContent').innerHTML = `
+            <div class="info-grid">
+                <div class="info-label">Họ và tên</div>
+                <div class="info-value">${escapeOldRouteHtml(r.hoTen || '')}</div>
+                <div class="info-label">Số điện thoại</div>
+                <div class="info-value">${escapeOldRouteHtml(r.sdt || '')}</div>
+
+                <div class="info-label">Tổng học phí</div>
+                <div class="info-value money">${money(r.tongHP)}</div>
+                <div class="info-label">Đã đóng</div>
+                <div class="info-value money">${money(r.hpDaDong)}</div>
+
+                <div class="info-label">Còn thiếu</div>
+                <div class="info-value remaining-money">${money(r.conLai)}</div>
+                <div class="info-label">Mã ưu đãi 1</div>
+                <div class="info-value">${escapeOldRouteHtml(r.maUuDai1 || '')}</div>
+
+                <div class="info-label">Ưu đãi 1</div>
+                <div class="info-value">${escapeOldRouteHtml(r.uuDai1 || '')}</div>
+                <div class="info-label">Ưu đãi 2</div>
+                <div class="info-value">${escapeOldRouteHtml(r.uuDai2 || r.gtUuDai2 || '')}</div>
+            </div>
+
+            <div class="divider"></div>
+
+            <table class="level-table">
+                <thead>
+                    <tr>
+                        <th>Khóa học</th>
+                        <th>Số tiền đã đóng</th>
+                        <th>Còn lại</th>
+                    </tr>
+                </thead>
+                <tbody>${levelRows}</tbody>
+            </table>
+        `;
+
+        modal.classList.remove('hidden');
+    }
+
+    // Hàm nạp dữ liệu từ bên trái sang form Hóa đơn
+    function displayInvoiceDefaults(data, countX) {
+        currentStudentData = data;
+        levelCountX = countX;
+
+        // 1. Cập nhật thông tin cơ bản bên trái
+        const infoDiv = document.getElementById('studentInfo');
+        const messageArea = document.getElementById('messageArea');
+        const levelsTableBody = document.getElementById('levelsTableBody');
+
+        messageArea.classList.add('hidden');
+        messageArea.style.backgroundColor = '#fef3c7';
+        messageArea.style.color = '#92400e';
+        
+        // Cập nhật mã học viên (T) bên Hóa đơn
+
+        if (data.error) {
+            infoDiv.classList.add('hidden');
+            messageArea.textContent = data.error || 'Không tìm thấy thông tin học viên. Vui lòng kiểm tra lại SĐT hoặc đăng ký mới.';
+            messageArea.classList.remove('hidden');
+            // Reset dữ liệu bên phải
+            clearInvoiceForm();
+            return;
+        }
+
+        // Cập nhật thông tin cơ bản (phần bên trái)
+        document.getElementById('hoTen').textContent = data.hoTen || '';
+        document.getElementById('sdt').textContent = data.sdt || '';
+        document.getElementById('coSo').textContent = data.coSo || '';
+        document.getElementById('maTV').textContent = data.maTV || '';
+        
+        document.getElementById('tongHP').textContent = formatCurrency(data.tongHP);
+        document.getElementById('hpDaDong').textContent = formatCurrency(data.hpDaDong);
+        document.getElementById('conLai').textContent = formatCurrency(data.conLai);
+        document.getElementById('tongSoKhoa').textContent = data.tongSoKhoa || 0;
+        
+        document.getElementById('maUuDai1').textContent = data.maUuDai1 || '';
+        document.getElementById('uuDai1').textContent = data.uuDai1 || '';
+        document.getElementById('gtUuDai2').textContent = data.gtUuDai2 || '';
+        document.getElementById('uuDai2').textContent = data.uuDai2 || '';
+
+        // Cập nhật bảng Level
+        levelsTableBody.innerHTML = ''; 
+        const visibleLevels = (data.levels || []).filter(level => level.khoaHoc);
+        if (visibleLevels.length > 0) {
+            visibleLevels.forEach(level => {
+                const row = levelsTableBody.insertRow();
+                row.insertCell().textContent = level.khoaHoc || '';
+                row.insertCell().innerHTML = `<span class="money">${formatCurrency(level.soTienDaDong)}</span>`;
+                row.insertCell().innerHTML = `<span class="remaining-money">${formatCurrency(level.conLai)}</span>`;
+            });
+        } else {
+            const row = levelsTableBody.insertRow();
+            const cell = row.insertCell();
+            cell.colSpan = 3;
+            cell.classList.add('text-center', 'italic', 'text-gray-500');
+            cell.textContent = 'Không có khóa học nào được ghi nhận.';
+        }
+
+        infoDiv.classList.remove('hidden');
+
+        // Nếu có hồ sơ lộ trình cũ thì chỉ thêm đúng một nút tại đây.
+        renderOldRouteButton(data);
+
+        // SEARCH thành công => kết quả luôn hiển thị đầy đủ.
+        toggleLookupSection(true);
+
+        // 2. Nạp dữ liệu sang form Hóa đơn (Bên phải)
+        clearInvoiceForm();
+        
+        document.getElementById('inv_hoTen').value = data.hoTen || '';
+        document.getElementById('inv_sdt').value = data.sdt || '';
+        document.getElementById('inv_coSo').value = data.coSo || '';
+        // Người xuất hóa đơn lấy từ phiên đăng nhập; không bị mất sau khi tra cứu học viên.
+        const sessionUserAfterSearch = window.ecorpSession;
+        document.getElementById('inv_nguoiXuatHD').value = sessionUserAfterSearch
+            ? ((sessionUserAfterSearch.maNV || '') + ' - ' + (sessionUserAfterSearch.hoTen || ''))
+            : '';
+        const ngayGDInput = document.getElementById('inv_ngayGD');
+        if (ngayGDInput) ngayGDInput.valueAsDate = new Date();
+
+        calculatePaymentsAndText();
+    }
+
+    // =========================================================
+    // PREMIUM SUCCESS MODAL
+    // =========================================================
+    function showInvoiceSuccessModal(invoiceId) {
+        const modal = document.getElementById('invoiceSuccessModal');
+        const idEl = document.getElementById('invoiceSuccessId');
+        if (!modal) return;
+        if (idEl) {
+            if (invoiceId !== undefined && invoiceId !== null && invoiceId !== '') {
+                idEl.textContent = 'Mã dòng hóa đơn: ' + invoiceId;
+                idEl.classList.remove('hidden');
+            } else {
+                idEl.textContent = '';
+                idEl.classList.add('hidden');
+            }
+        }
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeInvoiceSuccessModal() {
+        const modal = document.getElementById('invoiceSuccessModal');
+        if (modal) modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') { closeInvoiceSuccessModal(); closeInvoiceCheckModal(); closeEditRouteModal(); }
+    });
+
+    let isSubmittingInvoice = false;
+    let lastInvoiceRowId = null;
+    let lastInvoiceCheckSnapshot = null;
+    let lastMatchedInvoiceRow = null;
+
+    // Hàm xử lý Nộp Hóa đơn
+    function handleSubmitInvoice() {
+        if (isSubmittingInvoice) return;
+
+        const tongHP = getNumericValue(document.getElementById('inv_tongHPDong').value);
+        const hpValues = Array.from({ length: 10 }, (_, i) =>
+            getNumericValue(document.getElementById(`inv_hp${i + 1}`).value)
+        );
+        const invoiceAmount = hpValues.reduce((sum, value) => sum + value, 0);
+        const messageArea = document.getElementById('invoiceMessage');
+
+        if (!document.getElementById('inv_hoTen').value.trim() || !document.getElementById('inv_sdt').value.trim()) {
+            showInvoiceMessage('Vui lòng tra cứu học viên trước khi nộp hóa đơn.', 'error');
+            return;
+        }
+        if (tongHP <= 0 || invoiceAmount <= 0) {
+            showInvoiceMessage('Vui lòng nhập Tổng HP đóng hợp lệ (lớn hơn 0).', 'error');
+            return;
+        }
+        // Tổng HP + Giữ ưu đãi chỉ dùng cho logic/đối chiếu tại form,
+        // không ghi vào HOA DON.
+        const formData = {
+            sdt: document.getElementById('inv_sdt').value.trim(),
+            hoTen: document.getElementById('inv_hoTen').value.trim(),
+            phanLoai: document.getElementById('inv_phanLoai').value || 'Cơ sở',
+            coSoThu: document.getElementById('inv_coSo').value.trim(),
+            hopDong: document.getElementById('inv_hopDong').value,
+            ghiChu: document.getElementById('inv_ghiChu').value.trim(),
+            ngayGD: (document.getElementById('inv_ngayGD') || {}).value || new Date().toISOString().slice(0, 10),
+            nguoiXuatHD: document.getElementById('inv_nguoiXuatHD').value.trim(),
+            sessionToken: getEcorpSessionToken(),
+            // Chỉ gửi để server đối chiếu/logic, không append vào Sheet.
+            tongHPDong: tongHP,
+            giuUuDai: document.getElementById('inv_giuUuDai').value,
+            hp1: hpValues[0], hp2: hpValues[1], hp3: hpValues[2], hp4: hpValues[3],
+            hp5: hpValues[4], hp6: hpValues[5], hp7: hpValues[6], hp8: hpValues[7],
+            hp9: hpValues[8], hp10: hpValues[9]
+        };
+
+        const submitBtn = document.getElementById('submitInvoiceBtn');
+        isSubmittingInvoice = true;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Đang nộp...';
+        showInvoiceMessage('Đang lưu hóa đơn...', 'info');
+
+        try {
+            ecorpApi('saveInvoice', formData)
+                .then(function(result) {
+                    isSubmittingInvoice = false;
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'NỘP HÓA ĐƠN';
+
+                    if (result && result.status === 'SUCCESS') {
+                        lastInvoiceRowId = Number(result.id) || null;
+                        lastInvoiceCheckSnapshot = {
+                            rowId: lastInvoiceRowId,
+                            sdt: formData.sdt,
+                            amount: invoiceAmount,
+                            ngayGD: formData.ngayGD,
+                            phanLoai: formData.phanLoai
+                        };
+                        const checkBtn = document.getElementById('checkSaoKeBtn');
+                        const checkStatus = document.getElementById('invoiceCheckStatus');
+                        const pdfBtnNew = document.getElementById('taoPdfSaoKeBtn');
+                        const pdfResultNew = document.getElementById('pdfSaoKeResult');
+                        const paymentOutput = document.getElementById('paymentOutputSection');
+
+                        const isCoSo = String(formData.phanLoai || '')
+                            .trim()
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .toUpperCase() === 'CO SO';
+
+                        // Sau khi GỬI HÓA ĐƠN: luôn giữ vùng "Thanh toán & Hóa đơn" ẨN.
+                        // Vùng này chỉ được mở bởi generatePaymentQRCode() khi người dùng bấm XUẤT QR CODE.
+                        if (paymentOutput) paymentOutput.classList.add('hidden');
+                        if (pdfBtnNew) {
+                            pdfBtnNew.classList.add('hidden');
+                            pdfBtnNew.disabled = false;
+                            pdfBtnNew.textContent = 'XUẤT PDF HÓA ĐƠN';
+                        }
+                        if (pdfResultNew) {
+                            pdfResultNew.classList.add('hidden');
+                            pdfResultNew.innerHTML = '';
+                            pdfResultNew.classList.remove('error');
+                        }
+                        lastMatchedInvoiceRow = null;
+                        if (checkBtn) checkBtn.disabled = !lastInvoiceRowId || !isCoSo;
+                        if (checkStatus) {
+                            if (isCoSo) {
+                                checkStatus.textContent = 'Hóa đơn đã lưu. Có thể CHECK SAO KÊ.';
+                            } else if (result.requiresApproval) {
+                                checkStatus.textContent = 'Đang chờ Quản lý/Lễ tân duyệt. Sau khi được duyệt, chỉ cần XUẤT PDF.';
+                            } else if (result.alreadyPaid) {
+                                checkStatus.textContent = '✓ Hóa đơn đã được duyệt. Có thể XUẤT PDF.';
+                            } else {
+                                checkStatus.textContent = 'Hóa đơn đã được duyệt, có thể xuất PDF.';
+                            }
+                        }
+                        messageArea.classList.add('hidden');
+                        showInvoiceSuccessModal(result.id);
+                    } else {
+                        showInvoiceMessage('Lỗi nghiệp vụ khi nộp hóa đơn: ' + ((result && (result.error || result.message)) || 'Không rõ lỗi.'), 'error');
+                    }
+                })
+                .catch(function(error) {
+                    isSubmittingInvoice = false;
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'NỘP HÓA ĐƠN';
+                    showInvoiceMessage('Lỗi hệ thống khi nộp hóa đơn: ' + ecorpApiErrorText(error), 'error');
+                });
+        } catch (e) {
+            isSubmittingInvoice = false;
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'NỘP HÓA ĐƠN';
+            showInvoiceMessage('Lỗi: Không thể kết nối với Google Apps Script.', 'error');
+        }
+    }
+
+
+    // =========================================================
+    // SỬA LỘ TRÌNH ƯU ĐÃI - POPUP
+    // =========================================================
+    const EDIT_ROUTE_COSO_OPTIONS = [
+        'Bách Khoa', 'Tây Sơn', 'Cầu Giấy', 'Long Biên',
+        'Bình Thạnh', 'Hà Đông', 'Lĩnh Nam', 'Bắc Từ Liêm', 'Quận 10'
+    ];
+
+    const EDIT_ROUTE_PROMO_OPTIONS = [
+        'G01','G12','G012','TB4','T45','TB45','TB45SW',
+        'I01F','I01FA','I01FAB','I01FABN','I1F','I1FA','I1FAB','I1FABN',
+        'FA','FAB','FABIN','AB','ABIN',
+        'TG3G01','TG3G12','TG3G012','TG3TB4','TG3T45','TG3TB45','TG3TB45SW',
+        'TG3I01F','TG3I01FA','TG3I01FAB','TG3I01FABN','TG3I1F','TG3I1FA','TG3I1FAB','TG3I1FABN',
+        'TG3FA','TG3FAB','TG3FABIN','TG3AB','TG3ABIN',
+        'TG6G01','TG6G12','TG6G012','TG6TB4','TG6T45','TG6TB45','TG6TB45SW',
+        'TG6I01F','TG6I01FA','TG6I01FAB','TG6I01FABN','TG6I1F','TG6I1FA','TG6I1FAB','TG6I1FABN',
+        'TG6FA','TG6FAB','TG6FABIN','TG6AB','TG6ABIN'
+    ];
+
+    const EDIT_ROUTE_COURSE_OPTIONS = [
+        'Level 0','Level 1','Level 2','Foundation','IELTS A','IELTS B','IELTS IN',
+        'Extra class','Basic','TOEIC 400','TOEIC 550','TOEIC SW','BẢO LƯU','HỌC LẠI','CAMBRIDGE'
+    ];
+
+    function getEditRouteSelectOptions(options, currentValue) {
+        const current = String(currentValue || '');
+        const seen = new Set();
+        const list = [''].concat(options || []);
+        if (current && !list.includes(current)) list.splice(1, 0, current);
+        return list.filter(function (value) {
+            if (seen.has(value)) return false;
+            seen.add(value);
+            return true;
+        }).map(function (value) {
+            return '<option value="' + escapeHtml(value) + '">' + (value ? escapeHtml(value) : 'Chọn') + '</option>';
+        }).join('');
+    }
+
+    function formatEditRouteMoneyInput(input) {
+        if (!input) return;
+        let raw = String(input.value || '').replace(/\./g, '').replace(/[^0-9]/g, '');
+        if (!raw) { input.value = ''; return; }
+        input.value = formatCurrency(Number(raw));
+    }
+
+    function openEditRouteModal() {
+        if (!currentStudentData || currentStudentData.error || !currentStudentData.sdt) {
+            const messageArea = document.getElementById('messageArea');
+            if (messageArea) {
+                messageArea.textContent = 'Vui lòng tra cứu học viên trước khi chỉnh sửa lộ trình.';
+                messageArea.classList.remove('hidden');
+                messageArea.style.backgroundColor = '#fef3c7';
+                messageArea.style.color = '#92400e';
+            }
+            return;
+        }
+
+        let modal = document.getElementById('editRouteModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'editRouteModal';
+            modal.className = 'edit-route-modal hidden';
+            modal.innerHTML = `
+                <div class="edit-route-dialog" role="dialog" aria-modal="true" aria-labelledby="editRouteTitle">
+                    <div class="edit-route-head">
+                        <div>
+                            <div class="edit-route-title" id="editRouteTitle">
+                                <span class="material-symbols-outlined">edit_document</span>
+                                SỬA LỘ TRÌNH / ƯU ĐÃI
+                            </div>
+                            <div class="edit-route-subtitle" id="editRouteStudent"></div>
+                        </div>
+                        <button type="button" class="edit-route-close" aria-label="Đóng" title="Đóng">×</button>
+                    </div>
+                    <div class="edit-route-body">
+                        <div class="edit-route-basic-grid">
+                            <div class="edit-route-field">
+                                <label for="editRouteCoSo">Cơ sở học</label>
+                                <select id="editRouteCoSo"></select>
+                            </div>
+                            <div class="edit-route-field">
+                                <label for="editRoutePromo1">Mã Ưu đãi 1</label>
+                                <select id="editRoutePromo1"></select>
+                            </div>
+                            <div class="edit-route-field">
+                                <label for="editRouteGtuudai2">GT Ưu đãi 2</label>
+                                <input type="text" id="editRouteGtuudai2" autocomplete="off">
+                            </div>
+                            <div class="edit-route-field">
+                                <label for="editRouteUudai2">Ưu đãi 2</label>
+                                <input type="text" id="editRouteUudai2" inputmode="numeric" autocomplete="off">
+                            </div>
+                        </div>
+
+                        <div class="edit-route-section-label">
+                            <span class="material-symbols-outlined">school</span>
+                            KHÓA HỌC
+                        </div>
+                        <div class="edit-route-course-grid" id="editRouteCourseGrid"></div>
+
+                        <div id="editRouteMessage" class="edit-route-message hidden"></div>
+                    </div>
+                    <div class="edit-route-footer">
+                        <button type="button" id="submitEditRouteBtn" class="edit-route-submit-btn">
+                            <span class="material-symbols-outlined">cloud_upload</span>
+                            GỬI CẬP NHẬT
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            modal.querySelector('.edit-route-close').addEventListener('click', closeEditRouteModal);
+            modal.addEventListener('click', function (event) {
+                if (event.target === modal) closeEditRouteModal();
+            });
+            document.getElementById('editRouteUudai2').addEventListener('input', function () {
+                formatEditRouteMoneyInput(this);
+            });
+            document.getElementById('submitEditRouteBtn').addEventListener('click', submitEditRoute);
+        }
+
+        const data = currentStudentData || {};
+        const levels = Array.isArray(data.levels) ? data.levels : [];
+        const courseValues = Array.from({ length: 10 }, function (_, index) {
+            return levels[index] && levels[index].khoaHoc ? String(levels[index].khoaHoc) : '';
+        });
+
+        document.getElementById('editRouteStudent').textContent =
+            (data.hoTen || '') + (data.sdt ? ' • ' + data.sdt : '');
+        document.getElementById('editRouteCoSo').innerHTML = getEditRouteSelectOptions(EDIT_ROUTE_COSO_OPTIONS, data.coSo || '');
+        document.getElementById('editRouteCoSo').value = data.coSo || '';
+        document.getElementById('editRoutePromo1').innerHTML = getEditRouteSelectOptions(EDIT_ROUTE_PROMO_OPTIONS, data.maUuDai1 || '');
+        document.getElementById('editRoutePromo1').value = data.maUuDai1 || '';
+        document.getElementById('editRouteGtuudai2').value = data.gtUuDai2 || '';
+        document.getElementById('editRouteUudai2').value = data.uuDai2 || '';
+
+        const courseGrid = document.getElementById('editRouteCourseGrid');
+        courseGrid.innerHTML = '';
+        courseValues.forEach(function (currentValue, index) {
+            const field = document.createElement('div');
+            field.className = 'edit-route-field edit-route-course-field';
+            field.innerHTML = `
+                <label for="editRouteCourse${index + 1}">Khóa ${index + 1}</label>
+                <select id="editRouteCourse${index + 1}">${getEditRouteSelectOptions(EDIT_ROUTE_COURSE_OPTIONS, currentValue)}</select>
+            `;
+            courseGrid.appendChild(field);
+            document.getElementById('editRouteCourse' + (index + 1)).value = currentValue;
+        });
+
+        const message = document.getElementById('editRouteMessage');
+        message.textContent = '';
+        message.classList.add('hidden');
+        const submitBtn = document.getElementById('submitEditRouteBtn');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span class="material-symbols-outlined">cloud_upload</span>GỬI CẬP NHẬT';
+
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeEditRouteModal() {
+        const modal = document.getElementById('editRouteModal');
+        if (modal) modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    function showEditRouteMessage(text, type) {
+        const el = document.getElementById('editRouteMessage');
+        if (!el) return;
+        el.textContent = text || '';
+        el.classList.remove('hidden', 'success', 'error');
+        if (type === 'success') el.classList.add('success');
+        else if (type === 'error') el.classList.add('error');
+    }
+
+    function submitEditRoute() {
+        if (!currentStudentData || currentStudentData.error || !currentStudentData.sdt) {
+            showEditRouteMessage('Không xác định được học viên cần sửa.', 'error');
+            return;
+        }
+
+        const submitBtn = document.getElementById('submitEditRouteBtn');
+        if (!submitBtn || submitBtn.disabled) return;
+
+        const courses = Array.from({ length: 10 }, function (_, index) {
+            return document.getElementById('editRouteCourse' + (index + 1)).value || '';
+        });
+
+        const payload = {
+            sessionToken: getEcorpSessionToken(),
+            sdt: currentStudentData.sdt,
+            coSo: document.getElementById('editRouteCoSo').value || '',
+            maUuDai1: document.getElementById('editRoutePromo1').value || '',
+            gtUuDai2: document.getElementById('editRouteGtuudai2').value.trim(),
+            uuDai2: document.getElementById('editRouteUudai2').value.trim(),
+            courses: courses
+        };
+
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="material-symbols-outlined">progress_activity</span>ĐANG GỬI...';
+        showEditRouteMessage('Đang gửi yêu cầu cập nhật...', 'info');
+
+        ecorpApi('submitRouteEdit', payload)
+            .then(function (result) {
+                if (result && result.status === 'SUCCESS') {
+                    showEditRouteMessage('✓ Đã gửi cập nhật vào SỬA HVDK.', 'success');
+                    setTimeout(closeEditRouteModal, 650);
+                    const messageArea = document.getElementById('messageArea');
+                    if (messageArea) {
+    messageArea.textContent = '✓ Đã gửi yêu cầu Cập nhật học viên.';
+    messageArea.classList.remove('hidden');
+    messageArea.style.backgroundColor = '#dcfce7';
+    messageArea.style.color = '#166534';
+
+    // Tự ẩn sau 3 giây
+    setTimeout(function () {
+        messageArea.classList.add('hidden');
+    }, 3000);
+}
+                } else {
+                    throw new Error((result && (result.error || result.message)) || 'Không thể gửi cập nhật.');
+                }
+            })
+            .catch(function (error) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<span class="material-symbols-outlined">cloud_upload</span>GỬI CẬP NHẬT';
+                showEditRouteMessage('Lỗi hệ thống: ' + ecorpApiErrorText(error), 'error');
+            });
+    }
+
+    // --- CẬP NHẬT HÀM TÌM KIẾM BÊN TRÁI ---
+    
+    // Ghi đè hàm handleSearch cũ để thêm logic lấy countX
+    function handleSearch() {
+        // ============================
+        // TRẠNG THÁI: ĐANG TÌM KIẾM
+        // ============================
+        // Luôn mở phần tìm kiếm. Điều này đặc biệt quan trọng
+        // nếu trước đó người dùng vừa xuất QR và phần này đang bị ẩn.
+        toggleLookupSection(true);
+
+        // Khi quay lại Search thì ẩn khu vực QR/Link cũ,
+        // tránh hai trạng thái xuất hiện cùng lúc.
+        const paymentOutputSectionOnSearch =
+            document.getElementById('paymentOutputSection');
+
+        if (paymentOutputSectionOnSearch) {
+            paymentOutputSectionOnSearch.classList.add('hidden');
+        }
+
+        const phoneNumber = document.getElementById('phoneNumber').value.trim();
+        const searchBtn = document.getElementById('searchBtn');
+        const messageArea = document.getElementById('messageArea');
+        const studentInfoDiv = document.getElementById('studentInfo');
+        const invoiceMessage = document.getElementById('invoiceMessage');
+
+        if (!phoneNumber) {
+            messageArea.textContent = 'Vui lòng nhập Số điện thoại.';
+            messageArea.classList.remove('hidden');
+            messageArea.style.backgroundColor = '#fef3c7';
+            messageArea.style.color = '#92400e';
+            studentInfoDiv.classList.add('hidden');
+            invoiceMessage.classList.add('hidden');
+            clearInvoiceForm();
+            return;
+        }
+
+        searchBtn.disabled = true;
+        searchBtn.innerHTML = '<span class="material-symbols-outlined">search_check_2</span>';
+        searchBtn.title = 'Đang tìm kiếm...';
+        messageArea.textContent = 'Đang tìm kiếm dữ liệu...';
+        messageArea.classList.remove('hidden');
+        messageArea.style.backgroundColor = '#d1ecf1';
+        messageArea.style.color = '#0c5460';
+        studentInfoDiv.classList.add('hidden');
+        invoiceMessage.classList.add('hidden');
+        clearInvoiceForm();
+
+        ecorpApi('searchStudentData', {
+                phoneNumber: phoneNumber,
+                sessionToken: getEcorpSessionToken()
+            })
+            .then(function(result) {
+                searchBtn.disabled = false;
+                searchBtn.innerHTML = '<span class="material-symbols-outlined">search_check_2</span>';
+                searchBtn.title = 'Tìm kiếm';
+                if (!result || result.error) {
+                    displayInvoiceDefaults(result || { error: 'Không tìm thấy dữ liệu.' }, 0);
+                    return;
+                }
+                displayInvoiceDefaults(result, result.countX || 1);
+                if (result._cache) {
+                    messageArea.textContent = '✓ Tra cứu thành công';
+                    messageArea.style.backgroundColor = '#dcfce7';
+                    messageArea.style.color = '#166534';
+                } else {
+                    messageArea.classList.add('hidden');
+                }
+            })
+            .catch(function(error) {
+                searchBtn.disabled = false;
+                searchBtn.innerHTML = '<span class="material-symbols-outlined">search_check_2</span>';
+                searchBtn.title = 'Tìm kiếm';
+                displayInvoiceDefaults({ error: 'Lỗi hệ thống khi tra cứu: ' + ecorpApiErrorText(error) }, 0);
+            });
+    }
+
+
+    // =========================================================
+    // VIETQR - TẠO QR TRỰC TIẾP TỪ DỮ LIỆU ĐANG THAO TÁC
+    // =========================================================
+
+    // Tài khoản nhận tiền hiện tại theo DS TK!B6:B8.
+    // Khi DS TK đổi tài khoản, chỉ cần sửa 3 hằng số này.
+    const VIETQR_BANK = 'STB';
+    const VIETQR_ACCOUNT = '020987341193';
+    const VIETQR_ACCOUNT_NAME = 'DO HUNG CUONG';
+
+    function removeVietnameseTones(str) {
+        if (!str) return '';
+        return String(str)
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/g, 'd')
+            .replace(/Đ/g, 'D');
+    }
+
+    function getFirstFivePhoneDigits(phone) {
+    const digits = String(phone || '').replace(/\D/g, '');
+
+    if (!digits) return '';
+
+    // Bỏ số 0 ở đầu
+    const withoutLeadingZero = digits.replace(/^0/, '');
+
+    // Lấy 5 số đầu tiên
+    return withoutLeadingZero.slice(0, 5);
+}
+
+    let invoiceMessageTimer = null;
+
+    function showInvoiceMessage(message, type) {
+        const el = document.getElementById('invoiceMessage');
+        if (!el) return;
+        clearTimeout(invoiceMessageTimer);
+        el.textContent = message;
+        el.classList.remove('hidden');
+        if (type === 'error') {
+            el.style.backgroundColor = '#f8d7da';
+            el.style.color = '#721c24';
+        } else if (type === 'success') {
+            el.style.backgroundColor = '#d4edda';
+            el.style.color = '#155724';
+        } else {
+            el.style.backgroundColor = '#d1ecf1';
+            el.style.color = '#0c5460';
+        }
+        invoiceMessageTimer = setTimeout(function () {
+            el.classList.add('hidden');
+        }, 3000);
+    }
+
+    function generatePaymentQRCode() {
+        const qrSection = document.getElementById('paymentOutputSection');
+        const qrImage = document.getElementById('paymentQrImage');
+        const qrLoading = document.getElementById('qrLoading');
+        const qrInfo = document.getElementById('qrPaymentInfo');
+        const qrEmptyState = document.getElementById('qrEmptyState');
+        const generateBtn = document.getElementById('generateQrBtn');
+
+        // Lấy trực tiếp từ form hiện tại, không gọi lại Google Sheet.
+        const hoTenInput = document.getElementById('inv_hoTen');
+        const sdtInput = document.getElementById('inv_sdt');
+        const tongHPInput = document.getElementById('inv_tongHPDong');
+
+        const hoTen = hoTenInput ? hoTenInput.value.trim() : '';
+        const sdt = sdtInput ? sdtInput.value.trim() : '';
+        const tongHP = tongHPInput ? getNumericValue(tongHPInput.value) : 0;
+        const invoiceHpValues = Array.from({ length: 10 }, (_, i) =>
+            getNumericValue(document.getElementById(`inv_hp${i + 1}`).value)
+        );
+        const qrAmount = invoiceHpValues.reduce((sum, value) => sum + value, 0);
+
+        if (!hoTen) {
+            return;
+            return;
+        }
+        if (!sdt) {
+            return;
+            return;
+        }
+        if (getFirstFivePhoneDigits(sdt).length < 5) {
+            return;
+            return;
+        }
+        if (tongHP <= 0 || qrAmount <= 0) {
+            return;
+            return;
+        }
+
+        // ==========================================
+        // TRẠNG THÁI: ĐÃ XUẤT QR THÀNH CÔNG
+        // ==========================================
+        // Chỉ tại đây mới ẩn kết quả tìm kiếm.
+        // Nếu dữ liệu QR không hợp lệ ở trên thì Search vẫn giữ nguyên.
+        const lookupBodyForQR = document.getElementById('lookupBody');
+        const toggleLookupBtnForQR = document.getElementById('toggleLookupBtn');
+
+        if (lookupBodyForQR) {
+            lookupBodyForQR.classList.add('hidden');
+        }
+
+        if (toggleLookupBtnForQR) {
+            toggleLookupBtnForQR.textContent = '▼';
+        }
+
+        const paymentOutputSectionForQR =
+            document.getElementById('paymentOutputSection');
+
+        if (paymentOutputSectionForQR) {
+            paymentOutputSectionForQR.classList.remove('hidden');
+        }
+
+        const firstFive = getFirstFivePhoneDigits(sdt);
+        const hoTenKhongDau = removeVietnameseTones(hoTen).replace(/\s+/g, ' ').trim();
+        const addInfo = firstFive + hoTenKhongDau;
+        // QR phải đúng số tiền thực tế đang được phân bổ vào HP1-HP10.
+        const amount = Math.round(qrAmount);
+
+        // URL tương đương công thức IMAGE/VietQR hiện tại trên Sheet.
+        const qrUrl =
+            'https://img.vietqr.io/image/' +
+            encodeURIComponent(VIETQR_BANK) + '-' +
+            encodeURIComponent(VIETQR_ACCOUNT) +
+            '-compact2.png?amount=' +
+            encodeURIComponent(amount) +
+            '&addInfo=' + encodeURIComponent(addInfo) +
+            '&accountName=' + encodeURIComponent(VIETQR_ACCOUNT_NAME);
+
+        qrSection.classList.remove('hidden');
+        qrEmptyState.classList.add('hidden');
+        qrLoading.classList.remove('hidden');
+        qrImage.classList.add('hidden');
+        qrInfo.classList.add('hidden');
+        qrImage.dataset.qrUrl = qrUrl;
+        if (generateBtn) generateBtn.disabled = true;
+
+        qrImage.onload = function () {
+            qrLoading.classList.add('hidden');
+            qrImage.classList.remove('hidden');
+            qrInfo.textContent = formatCurrency(amount) + ' VNĐ • ' + addInfo;
+            qrInfo.classList.remove('hidden');
+            if (generateBtn) generateBtn.disabled = false;
+        };
+
+        qrImage.onerror = function () {
+            qrLoading.classList.add('hidden');
+            qrImage.classList.add('hidden');
+            qrEmptyState.textContent = 'Không thể tải QR Code. Vui lòng thử lại.';
+            qrEmptyState.classList.remove('hidden');
+            if (generateBtn) generateBtn.disabled = false;
+            /* QR load error: giữ trạng thái QR trống, không hiện popup lỗi. */
+        };
+
+        qrImage.src = qrUrl;
+
+        // Hiển thị khu vực QR ngay lập tức.
+        qrSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function openQrImage() {
+        const qrImage = document.getElementById('paymentQrImage');
+        const url = qrImage ? qrImage.dataset.qrUrl : '';
+        if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    function toggleLookupSection(forceOpen) {
+        const body = document.getElementById('lookupBody');
+        const btn = document.getElementById('toggleLookupBtn');
+        if (!body || !btn) return;
+
+        const shouldOpen = typeof forceOpen === 'boolean'
+            ? forceOpen
+            : body.classList.contains('hidden');
+
+        body.classList.toggle('hidden', !shouldOpen);
+        btn.textContent = shouldOpen ? '▲' : '▼';
+        btn.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    }
+
+    function copyInvoiceLink() {
+        const input = document.getElementById('invoiceLinkInput');
+        if (!input || !input.value) return;
+
+        const success = function () {
+            const btn = document.getElementById('copyInvoiceLinkBtn');
+            if (!btn) return;
+            const old = btn.textContent;
+            btn.textContent = 'ĐÃ SAO CHÉP ✓';
+            setTimeout(function () { btn.textContent = old; }, 1500);
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(input.value).then(success).catch(function () {
+                input.select();
+                document.execCommand('copy');
+                success();
+            });
+        } else {
+            input.select();
+            document.execCommand('copy');
+            success();
+        }
+    }
+
+    function openInvoiceCheckModal(result) {
+        const modal = document.getElementById('invoiceCheckModal');
+        const icon = document.getElementById('invoiceCheckIcon');
+        const resultBox = document.getElementById('invoiceCheckResult');
+        const title = document.getElementById('invoiceCheckResultTitle');
+        const reason = document.getElementById('invoiceCheckReason');
+        const steps = document.getElementById('invoiceCheckSteps');
+        const subtitle = document.getElementById('invoiceCheckSubtitle');
+        if (!modal || !title || !reason || !steps) return;
+
+        const ok = !!(
+            result &&
+            (
+                result.status === 'MATCHED' ||
+                result.matched === true ||
+                result.alreadyMatched === true
+            )
+        );
+
+        icon.textContent = ok ? '✓' : '!';
+        icon.style.background = ok
+            ? 'linear-gradient(135deg,#10b981,#059669)'
+            : 'linear-gradient(135deg,#f97316,#ea580c)';
+
+        resultBox.className = 'invoice-check-result ' + (ok ? 'success' : 'error');
+
+        title.textContent = ok
+            ? 'Đã check sao kê thành công'
+            : 'Check sao kê thất bại';
+
+        subtitle.textContent = ok
+            ? 'Hóa đơn đã được tạo thành công'
+            : 'Vui lòng liên hệ quản lý.';
+
+        reason.textContent = ok
+            ? 'Hóa đơn đã được tạo thành công.'
+            : 'Vui lòng liên hệ quản lý.';
+
+        // Không hiển thị chi tiết kỹ thuật đối soát cho người dùng.
+        // Backend vẫn trả details để phục vụ debug khi cần.
+        steps.innerHTML = '';
+
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+
+        // Nút XUẤT PDF luôn hiển thị. Check sao kê chỉ cập nhật row đã khớp;
+        // việc có được xuất hay không sẽ do backend kiểm tra trạng thái A tại thời điểm bấm.
+        const pdfBtn = document.getElementById('taoPdfSaoKeBtn');
+        const pdfResult = document.getElementById('pdfSaoKeResult');
+        if (ok) {
+            lastMatchedInvoiceRow = Number(result && result.row) || (lastInvoiceCheckSnapshot && lastInvoiceCheckSnapshot.rowId) || null;
+        }
+        if (pdfBtn) {
+            pdfBtn.classList.remove('hidden');
+            pdfBtn.disabled = false;
+            pdfBtn.textContent = 'XUẤT PDF HÓA ĐƠN';
+        }
+        if (pdfResult) { pdfResult.classList.add('hidden'); pdfResult.innerHTML = ''; pdfResult.classList.remove('error'); }
+    }
+
+    function closeInvoiceCheckModal() {
+        const modal = document.getElementById('invoiceCheckModal');
+        if (modal) modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function checkSaoKe() {
+        if (!lastInvoiceRowId || !lastInvoiceCheckSnapshot) {
+            openInvoiceCheckModal({
+                status: 'ERROR',
+                message: 'Chưa có hóa đơn vừa nộp để kiểm tra. Vui lòng NỘP HÓA ĐƠN trước rồi CHECK SAO KÊ.'
+            });
+            return;
+        }
+
+        const btn = document.getElementById('checkSaoKeBtn');
+        const status = document.getElementById('invoiceCheckStatus');
+        if (btn) { btn.disabled = true; btn.textContent = 'ĐANG CHECK...'; }
+        if (status) status.textContent = 'Đang kiểm tra sao kê...';
+
+        ecorpApi('checkSaoKe', {
+                rowId: lastInvoiceCheckSnapshot.rowId,
+                sdt: lastInvoiceCheckSnapshot.sdt,
+                amount: lastInvoiceCheckSnapshot.amount,
+                ngayGD: lastInvoiceCheckSnapshot.ngayGD,
+                phanLoai: lastInvoiceCheckSnapshot.phanLoai,
+                sessionToken: getEcorpSessionToken()
+            })
+            .then(function(result) {
+                if (btn) { btn.disabled = false; btn.textContent = 'CHECK SAO KÊ'; }
+                if (status) {
+                    const isMatched = !!(result && (result.status === 'MATCHED' || result.matched === true || result.alreadyMatched === true));
+                    status.textContent = isMatched ? '✓ Đã check sao kê thành công.' : '⚠ Check sao kê thất bại.';
+                }
+                openInvoiceCheckModal(result || { status: 'ERROR', message: 'Không nhận được kết quả từ hệ thống.' });
+            })
+            .catch(function(error) {
+                if (btn) { btn.disabled = false; btn.textContent = 'CHECK SAO KÊ'; }
+                if (status) status.textContent = '⚠ Check sao kê thất bại.';
+                openInvoiceCheckModal({ status: 'ERROR', message: 'Lỗi hệ thống khi check sao kê: ' + ecorpApiErrorText(error) });
+            });
+    }
+
+    function taoPdfSaoKe() {
+        const rowId = Number(lastInvoiceRowId || lastMatchedInvoiceRow) || 0;
+        if (!rowId) {
+            const pdfResultErr = document.getElementById('pdfSaoKeResult');
+            if (pdfResultErr) {
+                pdfResultErr.classList.remove('hidden');
+                pdfResultErr.classList.add('error');
+                pdfResultErr.textContent = 'Chưa xác định được hóa đơn. Vui lòng NỘP HÓA ĐƠN trước.';
+            }
+            return;
+        }
+
+        const btn = document.getElementById('taoPdfSaoKeBtn');
+        const resultBox = document.getElementById('pdfSaoKeResult');
+        if (btn) { btn.disabled = true; btn.textContent = 'ĐANG TẠO PDF...'; }
+        if (resultBox) { resultBox.classList.add('hidden'); resultBox.classList.remove('error'); resultBox.innerHTML = ''; }
+
+        ecorpApi('taoPdfSaoKe', {
+                rowId: rowId,
+                sessionToken: getEcorpSessionToken()
+            })
+            .then(function (result) {
+                if (btn) { btn.disabled = false; btn.textContent = 'XUẤT PDF HÓA ĐƠN'; }
+                if (!resultBox) return;
+                if (result && result.status === 'SUCCESS' && result.pdfUrl) {
+                    resultBox.classList.remove('error');
+                    resultBox.classList.remove('hidden');
+                    resultBox.innerHTML = '<a href="' + escapeHtml(result.pdfUrl) + '" target="_blank" rel="noopener noreferrer">Mở PDF Hóa đơn ↗</a>';
+                } else {
+                    resultBox.classList.add('error');
+                    resultBox.classList.remove('hidden');
+                    resultBox.textContent = (result && result.message) || 'Không tạo được PDF. Vui lòng thử lại.';
+                }
+            })
+            .catch(function (error) {
+                if (btn) { btn.disabled = false; btn.textContent = 'XUẤT PDF HÓA ĐƠN'; }
+                if (resultBox) {
+                    resultBox.classList.add('error');
+                    resultBox.classList.remove('hidden');
+                    resultBox.textContent = 'Lỗi hệ thống khi tạo PDF: ' + ecorpApiErrorText(error);
+                }
+            });
+    }
+
+    // --- GẮN SỰ KIỆN MỚI ---
+    
+    // Gán sự kiện cho các nút
+    document.getElementById('submitInvoiceBtn').addEventListener('click', handleSubmitInvoice);
+    
+    // Gán sự kiện cho các ô tính toán
+    document.getElementById('inv_tongHPDong').addEventListener('change', calculatePaymentsAndText);
+    document.getElementById('inv_giuUuDai').addEventListener('change', calculatePaymentsAndText);
+
+    // Gán sự kiện cho nút Search (Ghi đè lên sự kiện cũ)
+    document.getElementById('searchBtn').addEventListener('click', handleSearch);
+    document.getElementById('editRouteBtn').addEventListener('click', openEditRouteModal);
+    
+    // Gán sự kiện Reset
+    document.getElementById('resetBtn').addEventListener('click', handleReset);
+    
+    // Gắn lại sự kiện Enter trên SĐT
+    document.getElementById('phoneNumber').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        handleSearch();
+      }
+    });
+
+    // Reset giao diện khi tải lần đầu
+    function handleReset() {
+        document.getElementById('phoneNumber').value = '';
+        document.getElementById('studentInfo').classList.add('hidden');
+        document.getElementById('messageArea').classList.add('hidden');
+        document.getElementById('levelsTableBody').innerHTML = ''; // Reset bảng
+        document.getElementById('searchBtn').disabled = false;
+        document.getElementById('searchBtn').innerHTML = '<span class="material-symbols-outlined">search_check_2</span>';
+        document.getElementById('searchBtn').title = 'Tìm kiếm';
+        currentStudentData = {};
+        levelCountX = 0;
+        clearInvoiceForm(); // Reset form Hóa đơn
+        toggleLookupSection(true);
+    }
+    handleReset(); // Gọi hàm này để thiết lập trạng thái ban đầu
+
+    // Hàm rỗng để tránh lỗi nếu có nơi gọi đến displayStudentInfo
+    function displayStudentInfo(data) {
+        // Chỉ để tránh lỗi. Logic chính đã nằm trong displayInvoiceDefaults
+        const infoDiv = document.getElementById('studentInfo');
+        const messageArea = document.getElementById('messageArea');
+        messageArea.classList.add('hidden');
+        infoDiv.classList.add('hidden');
+        if (data && data.error) {
+            messageArea.textContent = data.error;
+            messageArea.classList.remove('hidden');
+        }
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        const ngayGD = document.getElementById('inv_ngayGD');
+        if (ngayGD && !ngayGD.value) ngayGD.valueAsDate = new Date();
+    });
+
+</script>
+
+<!-- =========================================================
+     XUẤT LẠI HÓA ĐƠN CŨ — REAL DATA MODAL
+     ========================================================= -->
+<div id="reissueInvoiceModal" class="reissue-invoice-modal hidden" aria-hidden="true">
+    <div class="reissue-invoice-dialog" role="dialog" aria-modal="true" aria-labelledby="reissueInvoiceTitle">
+        <div class="reissue-invoice-head">
+            <div class="reissue-invoice-head-left">
+                <div class="reissue-invoice-icon"><span class="material-symbols-outlined">history</span></div>
+                <div>
+                    <div id="reissueInvoiceTitle" class="reissue-invoice-title">XUẤT LẠI HÓA ĐƠN CŨ</div>
+                    <div class="reissue-invoice-subtitle">Tra cứu hóa đơn đã phát hành theo SĐT và đúng số tiền</div>
+                </div>
+            </div>
+            <button type="button" id="closeReissueInvoiceBtn" class="reissue-invoice-close" aria-label="Đóng">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <div class="reissue-invoice-body">
+            <div class="reissue-student-summary">
+                <div>
+                    <div id="reissueStudentName" class="reissue-student-name">—</div>
+                    <div id="reissueStudentPhone" class="reissue-student-phone">Số điện thoại: —</div>
+                </div>
+                <div id="reissueSearchAmount" class="reissue-search-amount">Số tiền: —</div>
+            </div>
+
+            <div id="reissueInvoiceLoading" class="reissue-empty hidden">
+                <span class="material-symbols-outlined" style="font-size:28px">hourglass_top</span>
+                <strong>Đang tìm hóa đơn...</strong>
+                <span>Vui lòng chờ trong giây lát.</span>
+            </div>
+
+            <div id="reissueInvoiceEmpty" class="reissue-empty hidden">
+                <span class="material-symbols-outlined" style="font-size:30px">receipt_long</span>
+                <strong>Không tìm thấy hóa đơn phù hợp</strong>
+                <span>Không có hóa đơn nào vừa <b>Đã thu</b>, đúng SĐT và đúng số tiền đã nhập.</span>
+            </div>
+
+            <div id="reissueInvoiceTableWrap" class="reissue-table-wrap hidden">
+                <table class="reissue-table">
+                    <thead>
+                        <tr>
+                            <th>STT</th>
+                            <th>Ngày CK</th>
+                            <th>Số tiền</th>
+                            <th>Mã hóa đơn</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reissueInvoiceTableBody"></tbody>
+                </table>
+            </div>
+
+            <div class="reissue-invoice-note">
+                <span class="material-symbols-outlined">info</span>
+                <span>Chỉ hiển thị hóa đơn có trạng thái <b>Đã thu</b>, đúng số điện thoại và <b>đúng số tiền đang nhập</b>.</span>
+            </div>
+        </div>
+        <div class="reissue-invoice-footer">
+            <button type="button" id="cancelReissueInvoiceBtn">ĐÓNG</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const btn = document.getElementById('reissueInvoiceBtn');
+    const modal = document.getElementById('reissueInvoiceModal');
+    const closeBtn = document.getElementById('closeReissueInvoiceBtn');
+    const cancelBtn = document.getElementById('cancelReissueInvoiceBtn');
+    const tableWrap = document.getElementById('reissueInvoiceTableWrap');
+    const tableBody = document.getElementById('reissueInvoiceTableBody');
+    const loading = document.getElementById('reissueInvoiceLoading');
+    const empty = document.getElementById('reissueInvoiceEmpty');
+    const nameEl = document.getElementById('reissueStudentName');
+    const phoneEl = document.getElementById('reissueStudentPhone');
+    const amountEl = document.getElementById('reissueSearchAmount');
+
+    function setVisible(el, visible) {
+        if (!el) return;
+        el.classList.toggle('hidden', !visible);
+    }
+
+    function formatAmountForDisplay(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return String(value || '');
+        return n.toLocaleString('vi-VN') + ' ₫';
+    }
+
+    function resetState() {
+        setVisible(tableWrap, false);
+        setVisible(loading, false);
+        setVisible(empty, false);
+        if (tableBody) tableBody.innerHTML = '';
+    }
+
+    function openModal() {
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    }
+
+    function renderResult(result, phone, amount) {
+        resetState();
+
+        const hoTen = result && result.hoTen ? result.hoTen : (document.getElementById('inv_hoTen')?.value || '');
+        const sdt = result && result.sdt ? result.sdt : phone;
+        if (nameEl) nameEl.textContent = hoTen || 'Không xác định';
+        if (phoneEl) phoneEl.textContent = 'Số điện thoại: ' + (sdt || '—');
+        if (amountEl) amountEl.textContent = 'Số tiền: ' + formatAmountForDisplay(amount);
+
+        if (!result || result.status !== 'SUCCESS') {
+            if (empty) {
+                empty.innerHTML = '<span class="material-symbols-outlined" style="font-size:30px">error_outline</span>' +
+                    '<strong>Không thể tra cứu hóa đơn</strong>' +
+                    '<span>' + escapeHtml((result && result.message) || 'Không nhận được dữ liệu hợp lệ từ hệ thống.') + '</span>';
+            }
+            setVisible(empty, true);
+            return;
+        }
+
+        const items = Array.isArray(result.items) ? result.items : [];
+        if (!items.length) {
+            setVisible(empty, true);
+            return;
+        }
+
+        items.forEach(function (item, index) {
+            const tr = document.createElement('tr');
+            const pdfUrl = item && item.pdfUrl ? String(item.pdfUrl) : '';
+            const maHD = item && item.maHoaDon ? String(item.maHoaDon) : '';
+
+            const stt = document.createElement('td');
+            stt.textContent = String(index + 1);
+
+            const ngay = document.createElement('td');
+            ngay.textContent = item.ngayCK || '—';
+
+            const money = document.createElement('td');
+            money.textContent = item.soTien || '—';
+
+            const invoice = document.createElement('td');
+            if (pdfUrl) {
+                const a = document.createElement('a');
+                a.href = pdfUrl;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.title = 'Mở PDF hóa đơn';
+                a.textContent = maHD || 'Mở PDF';
+                const icon = document.createElement('span');
+                icon.className = 'material-symbols-outlined';
+                icon.textContent = 'open_in_new';
+                a.appendChild(icon);
+                invoice.appendChild(a);
+            } else {
+                invoice.textContent = maHD || '—';
+                invoice.classList.add('reissue-pdf-missing');
+                invoice.title = 'Không tìm thấy file PDF tương ứng trong thư mục hóa đơn';
+            }
+
+            tr.appendChild(stt);
+            tr.appendChild(ngay);
+            tr.appendChild(money);
+            tr.appendChild(invoice);
+            tableBody.appendChild(tr);
+        });
+
+        setVisible(tableWrap, true);
+    }
+
+    async function openAndSearch() {
+        const phoneInput = document.getElementById('inv_sdt');
+        const nameInput = document.getElementById('inv_hoTen');
+        const amountInput = document.getElementById('inv_tongHPDong');
+        const phone = phoneInput ? phoneInput.value.trim() : '';
+        const name = nameInput ? nameInput.value.trim() : '';
+        const amount = amountInput ? getNumericValue(amountInput.value) : 0;
+
+        if (!phone || !name) {
+            if (typeof showInvoiceMessage === 'function') {
+                showInvoiceMessage('Vui lòng tra cứu học viên trước khi xuất lại hóa đơn.', 'error');
+            }
+            return;
+        }
+        if (amount <= 0) {
+            if (typeof showInvoiceMessage === 'function') {
+                showInvoiceMessage('Vui lòng nhập Tổng HP đóng lớn hơn 0 trước khi xuất lại hóa đơn.', 'error');
+            }
+            return;
+        }
+
+        if (nameEl) nameEl.textContent = name;
+        if (phoneEl) phoneEl.textContent = 'Số điện thoại: ' + phone;
+        if (amountEl) amountEl.textContent = 'Số tiền: ' + formatAmountForDisplay(amount);
+        resetState();
+        setVisible(loading, true);
+        openModal();
+
+        if (btn) btn.disabled = true;
+        try {
+            const result = await ecorpApi('timHoaDonCu', {
+                sdt: phone,
+                soTien: amount,
+                sessionToken: getEcorpSessionToken()
+            });
+            renderResult(result, phone, amount);
+        } catch (error) {
+            renderResult({ status: 'ERROR', message: ecorpApiErrorText(error) }, phone, amount);
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    if (btn) btn.addEventListener('click', openAndSearch);
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+    if (modal) {
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) closeModal();
+        });
+    }
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeModal();
+    });
+})();
+</script>
+
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function (err) {
+      console.warn('ECORP Service Worker registration failed:', err);
+    });
+  });
+}
+</script>
+
+</body>
+</html>
