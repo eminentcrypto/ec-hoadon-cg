@@ -1683,19 +1683,6 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="ECORP Hóa đơn">
 
-
-<style id="responsive-phone-label">
-.phone-label-mobile { display: none; }
-
-@media (max-width: 640px) {
-    .phone-label-desktop { display: none !important; }
-    .phone-label-mobile {
-        display: inline !important;
-        white-space: nowrap;
-    }
-}
-</style>
-
 </head>
 <body class="ecorp-auth-pending">
 
@@ -1888,7 +1875,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
 
             <div id="lookupBody">
             <div class="search-area">
-                <label for="phoneNumber"><span class="phone-label-desktop">Số điện thoại:</span><span class="phone-label-mobile">Số ĐT:</span></label>
+                <label for="phoneNumber">Số điện thoại:</label>
                 <input type="text" id="phoneNumber" placeholder="" maxlength="15">
                 <button id="searchBtn" class="icon-action-btn icon-action-primary" type="button" title="Tìm kiếm" aria-label="Tìm kiếm">
                     <span class="material-symbols-outlined">search_check_2</span>
@@ -2020,7 +2007,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
                     <option value="Hóa đơn cũ">Hóa đơn cũ</option>
                     <option value="T">T</option>
                     <option value="TE">TE</option>
-                    <option value="Chuyển dưới 100k">Chuyển dưới 100k</option>
+                    <option value="GLOW">GLOW</option>
                     <option value="VCB">VCB</option>
                     <option value="CK nội dung khác">CK nội dung khác</option>
                     <option value="TGT">TGT</option>
@@ -2878,9 +2865,25 @@ function calculatePaymentsAndText() {
                             pdfResultNew.classList.remove('error');
                         }
                         lastMatchedInvoiceRow = null;
-                        if (checkBtn) checkBtn.disabled = !lastInvoiceRowId || !isCoSo;
+                        const isAutoPaidAfterSubmit = !!(result && result.alreadyPaid);
+                        const isHoaDonCuAfterSubmit = !!(result && result.isHoaDonCu) || String(formData.phanLoai || '')
+                            .trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() === 'HOA DON CU';
+
+                        if (checkBtn) checkBtn.disabled = !lastInvoiceRowId || (!isCoSo && !isAutoPaidAfterSubmit);
+                        if (pdfBtnNew && isAutoPaidAfterSubmit && !isHoaDonCuAfterSubmit) {
+                            pdfBtnNew.classList.remove('hidden');
+                            pdfBtnNew.disabled = false;
+                        }
+                        if (pdfBtnNew && isHoaDonCuAfterSubmit) {
+                            pdfBtnNew.classList.add('hidden');
+                            pdfBtnNew.disabled = true;
+                        }
                         if (checkStatus) {
-                            if (isCoSo) {
+                            if (isAutoPaidAfterSubmit) {
+                                checkStatus.textContent = isHoaDonCuAfterSubmit
+                                    ? 'Hóa đơn cũ đã được ghi nhận Đã thu.'
+                                    : 'Hóa đơn đã tự động Đã thu. Có thể XUẤT PDF.';
+                            } else if (isCoSo) {
                                 checkStatus.textContent = 'Hóa đơn đã lưu. Có thể CHECK SAO KÊ.';
                             } else if (result.requiresApproval) {
                                 checkStatus.textContent = 'Đang chờ Quản lý/Lễ tân duyệt. Sau khi được duyệt, chỉ cần XUẤT PDF.';
@@ -3225,11 +3228,38 @@ function calculatePaymentsAndText() {
     // VIETQR - TẠO QR TRỰC TIẾP TỪ DỮ LIỆU ĐANG THAO TÁC
     // =========================================================
 
-    // Tài khoản nhận tiền hiện tại theo DS TK!B6:B8.
-    // Khi DS TK đổi tài khoản, chỉ cần sửa 3 hằng số này.
+    // Tài khoản QR mặc định (giữ nguyên luồng hiện tại cho các phân loại khác VCB/TE).
     const VIETQR_BANK = 'STB';
     const VIETQR_ACCOUNT = '020987341193';
     const VIETQR_ACCOUNT_NAME = 'DO HUNG CUONG';
+
+    async function getQrAccountForClassification(phanLoai) {
+        const normalized = String(phanLoai || '')
+            .trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+
+        if (normalized !== 'VCB' && normalized !== 'TE') {
+            return {
+                bank: VIETQR_BANK,
+                account: VIETQR_ACCOUNT,
+                accountName: VIETQR_ACCOUNT_NAME
+            };
+        }
+
+        const result = await ecorpApi('getQrAccountConfig', {
+            phanLoai: phanLoai,
+            sessionToken: getEcorpSessionToken()
+        });
+
+        if (!result || result.status !== 'SUCCESS') {
+            throw new Error((result && result.message) || 'Không lấy được thông tin tài khoản QR.');
+        }
+
+        return {
+            bank: result.bank,
+            account: result.account,
+            accountName: result.accountName
+        };
+    }
 
     function removeVietnameseTones(str) {
         if (!str) return '';
@@ -3275,7 +3305,7 @@ function calculatePaymentsAndText() {
         }, 3000);
     }
 
-    function generatePaymentQRCode() {
+    async function generatePaymentQRCode() {
         const qrSection = document.getElementById('paymentOutputSection');
         const qrImage = document.getElementById('paymentQrImage');
         const qrLoading = document.getElementById('qrLoading');
@@ -3336,43 +3366,33 @@ function calculatePaymentsAndText() {
             paymentOutputSectionForQR.classList.remove('hidden');
         }
 
-        // Với Phân loại KHÁC "Cơ sở": không cần CHECK SAO KÊ (nút này đã bị
-        // disabled/mờ ngay từ lúc NỘP HÓA ĐƠN), nhưng nút XUẤT PDF HÓA ĐƠN
-        // vẫn phải hiện ra ngay khi bấm XUẤT QR CODE để nhân viên có chỗ bấm
-        // sau khi được Quản lý/Lễ tân duyệt. Backend taoPdfSaoKe() sẽ tự chặn
-        // nếu hóa đơn chưa ở trạng thái "Đã thu" và cho xuất PDF nếu đã duyệt.
-        // (Với "Cơ sở" thì giữ nguyên hành vi cũ: nút PDF chỉ hiện sau khi
-        // CHECK SAO KÊ khớp, xử lý trong openInvoiceCheckModal().)
-        const phanLoaiSelectForQR = document.getElementById('inv_phanLoai');
-        const isCoSoForQR = String(phanLoaiSelectForQR ? phanLoaiSelectForQR.value : '')
-            .trim()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .toUpperCase() === 'CO SO';
-        if (!isCoSoForQR) {
-            const pdfBtnForQR = document.getElementById('taoPdfSaoKeBtn');
-            if (pdfBtnForQR) {
-                pdfBtnForQR.classList.remove('hidden');
-                pdfBtnForQR.disabled = false;
-                pdfBtnForQR.textContent = 'XUẤT PDF HÓA ĐƠN';
-            }
-        }
-
         const firstFive = getFirstFivePhoneDigits(sdt);
         const hoTenKhongDau = removeVietnameseTones(hoTen).replace(/\s+/g, ' ').trim();
         const addInfo = firstFive + hoTenKhongDau;
         // QR phải đúng số tiền thực tế đang được phân bổ vào HP1-HP10.
         const amount = Math.round(qrAmount);
 
+        let qrConfig;
+        try {
+            qrConfig = await getQrAccountForClassification(document.getElementById('inv_phanLoai')?.value || 'Cơ sở');
+        } catch (error) {
+            qrSection.classList.remove('hidden');
+            qrLoading.classList.add('hidden');
+            qrEmptyState.classList.remove('hidden');
+            qrEmptyState.textContent = error && error.message ? error.message : 'Không lấy được thông tin tài khoản QR.';
+            if (generateBtn) generateBtn.disabled = false;
+            return;
+        }
+
         // URL tương đương công thức IMAGE/VietQR hiện tại trên Sheet.
         const qrUrl =
             'https://img.vietqr.io/image/' +
-            encodeURIComponent(VIETQR_BANK) + '-' +
-            encodeURIComponent(VIETQR_ACCOUNT) +
+            encodeURIComponent(qrConfig.bank) + '-' +
+            encodeURIComponent(qrConfig.account) +
             '-compact2.png?amount=' +
             encodeURIComponent(amount) +
             '&addInfo=' + encodeURIComponent(addInfo) +
-            '&accountName=' + encodeURIComponent(VIETQR_ACCOUNT_NAME);
+            '&accountName=' + encodeURIComponent(qrConfig.accountName);
 
         qrSection.classList.remove('hidden');
         qrEmptyState.classList.add('hidden');
@@ -3502,10 +3522,21 @@ function calculatePaymentsAndText() {
         if (ok) {
             lastMatchedInvoiceRow = Number(result && result.row) || (lastInvoiceCheckSnapshot && lastInvoiceCheckSnapshot.rowId) || null;
         }
+        const currentPhanLoaiForPdf = String(document.getElementById('inv_phanLoai')?.value || '')
+            .trim()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toUpperCase();
+        const isHoaDonCuForPdf = currentPhanLoaiForPdf === 'HOA DON CU';
         if (pdfBtn) {
-            pdfBtn.classList.remove('hidden');
-            pdfBtn.disabled = false;
-            pdfBtn.textContent = 'XUẤT PDF HÓA ĐƠN';
+            if (isHoaDonCuForPdf) {
+                pdfBtn.classList.add('hidden');
+                pdfBtn.disabled = true;
+            } else {
+                pdfBtn.classList.remove('hidden');
+                pdfBtn.disabled = false;
+                pdfBtn.textContent = 'XUẤT PDF HÓA ĐƠN';
+            }
         }
         if (pdfResult) { pdfResult.classList.add('hidden'); pdfResult.innerHTML = ''; pdfResult.classList.remove('error'); }
     }
@@ -3563,6 +3594,18 @@ function calculatePaymentsAndText() {
     }
 
     function taoPdfSaoKe() {
+        const currentTypeForPdf = String(document.getElementById('inv_phanLoai')?.value || '')
+            .trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+        if (currentTypeForPdf === 'HOA DON CU') {
+            const blockedPdfResult = document.getElementById('pdfSaoKeResult');
+            if (blockedPdfResult) {
+                blockedPdfResult.classList.remove('hidden');
+                blockedPdfResult.classList.add('error');
+                blockedPdfResult.textContent = 'Hóa đơn cũ không được xuất PDF hóa đơn mới.';
+            }
+            return;
+        }
+
         const rowId = Number(lastInvoiceRowId || lastMatchedInvoiceRow) || 0;
         if (!rowId) {
             const pdfResultErr = document.getElementById('pdfSaoKeResult');
@@ -3660,6 +3703,36 @@ function calculatePaymentsAndText() {
     document.addEventListener('DOMContentLoaded', function() {
         const ngayGD = document.getElementById('inv_ngayGD');
         if (ngayGD && !ngayGD.value) ngayGD.valueAsDate = new Date();
+
+        // Hóa đơn cũ: tuyệt đối không cho xuất PDF hóa đơn mới.
+        const phanLoaiSelect = document.getElementById('inv_phanLoai');
+        if (phanLoaiSelect) {
+            phanLoaiSelect.addEventListener('change', function() {
+                const value = String(this.value || '')
+                    .trim()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toUpperCase();
+                const pdfBtn = document.getElementById('taoPdfSaoKeBtn');
+                const pdfResult = document.getElementById('pdfSaoKeResult');
+                if (pdfBtn) {
+                    if (value === 'HOA DON CU') {
+                        pdfBtn.classList.add('hidden');
+                        pdfBtn.disabled = true;
+                    } else {
+                        // Rời Hóa đơn cũ -> PDF hoạt động lại bình thường.
+                        pdfBtn.classList.remove('hidden');
+                        pdfBtn.disabled = false;
+                        pdfBtn.textContent = 'XUẤT PDF HÓA ĐƠN';
+                    }
+                }
+                if (pdfResult) {
+                    pdfResult.classList.add('hidden');
+                    pdfResult.innerHTML = '';
+                    pdfResult.classList.remove('error');
+                }
+            });
+        }
     });
 
 </script>
