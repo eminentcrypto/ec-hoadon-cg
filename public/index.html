@@ -2020,7 +2020,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
                     <option value="Hóa đơn cũ">Hóa đơn cũ</option>
                     <option value="T">T</option>
                     <option value="TE">TE</option>
-                    <option value="Chuyển dưới 100k">Chuyển dưới 100k</option>
+                    <option value="GLOW">GLOW</option>
                     <option value="VCB">VCB</option>
                     <option value="CK nội dung khác">CK nội dung khác</option>
                     <option value="TGT">TGT</option>
@@ -2863,6 +2863,10 @@ function calculatePaymentsAndText() {
                             .normalize('NFD')
                             .replace(/[\u0300-\u036f]/g, '')
                             .toUpperCase() === 'CO SO';
+                        // Phân loại "Hóa đơn cũ": không CHECK SAO KÊ, không XUẤT PDF.
+                        // So sánh trực tiếp (không cần bỏ dấu) vì đây là giá trị cố định
+                        // lấy từ <select>, không phải text người dùng tự gõ.
+                        const isHoaDonCu = String(formData.phanLoai || '').trim() === 'Hóa đơn cũ';
 
                         // Sau khi GỬI HÓA ĐƠN: luôn giữ vùng "Thanh toán & Hóa đơn" ẨN.
                         // Vùng này chỉ được mở bởi generatePaymentQRCode() khi người dùng bấm XUẤT QR CODE.
@@ -2878,9 +2882,12 @@ function calculatePaymentsAndText() {
                             pdfResultNew.classList.remove('error');
                         }
                         lastMatchedInvoiceRow = null;
-                        if (checkBtn) checkBtn.disabled = !lastInvoiceRowId || !isCoSo;
+                        // "Hóa đơn cũ" không bao giờ được CHECK SAO KÊ, dù có lastInvoiceRowId.
+                        if (checkBtn) checkBtn.disabled = !lastInvoiceRowId || !isCoSo || isHoaDonCu;
                         if (checkStatus) {
-                            if (isCoSo) {
+                            if (isHoaDonCu) {
+                                checkStatus.textContent = 'Hóa đơn cũ: đã ghi nhận đã thu, không xuất PDF.';
+                            } else if (isCoSo) {
                                 checkStatus.textContent = 'Hóa đơn đã lưu. Có thể CHECK SAO KÊ.';
                             } else if (result.requiresApproval) {
                                 checkStatus.textContent = 'Đang chờ Quản lý/Lễ tân duyệt. Sau khi được duyệt, chỉ cần XUẤT PDF.';
@@ -3225,11 +3232,10 @@ function calculatePaymentsAndText() {
     // VIETQR - TẠO QR TRỰC TIẾP TỪ DỮ LIỆU ĐANG THAO TÁC
     // =========================================================
 
-    // Tài khoản nhận tiền hiện tại theo DS TK!B6:B8.
-    // Khi DS TK đổi tài khoản, chỉ cần sửa 3 hằng số này.
-    const VIETQR_BANK = 'STB';
-    const VIETQR_ACCOUNT = '020987341193';
-    const VIETQR_ACCOUNT_NAME = 'DO HUNG CUONG';
+    // Tài khoản nhận tiền KHÔNG còn hard-code ở đây nữa. Được đọc động từ
+    // sheet "DS TK" (spreadsheet riêng) qua action layTaiKhoanQR, tùy theo
+    // Phân loại (xem generatePaymentQRCode()). Nếu đọc lỗi -> báo lỗi và
+    // dừng, KHÔNG fallback về giá trị cũ, để tránh xuất QR sai tài khoản.
 
     function removeVietnameseTones(str) {
         if (!str) return '';
@@ -3344,17 +3350,23 @@ function calculatePaymentsAndText() {
         // (Với "Cơ sở" thì giữ nguyên hành vi cũ: nút PDF chỉ hiện sau khi
         // CHECK SAO KÊ khớp, xử lý trong openInvoiceCheckModal().)
         const phanLoaiSelectForQR = document.getElementById('inv_phanLoai');
-        const isCoSoForQR = String(phanLoaiSelectForQR ? phanLoaiSelectForQR.value : '')
-            .trim()
+        const phanLoaiValueForQR = String(phanLoaiSelectForQR ? phanLoaiSelectForQR.value : '').trim();
+        const isCoSoForQR = phanLoaiValueForQR
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '')
             .toUpperCase() === 'CO SO';
+        // "Hóa đơn cũ" chỉ ghi nhận đã thu, KHÔNG được xuất PDF -> nút vẫn
+        // hiện ra (đồng bộ UX với các Phân loại khác) nhưng luôn disabled.
+        // Server (taoPdfSaoKe) vẫn chặn lại lần nữa nếu client bị can thiệp.
+        const isHoaDonCuForQR = phanLoaiValueForQR === 'Hóa đơn cũ';
         if (!isCoSoForQR) {
             const pdfBtnForQR = document.getElementById('taoPdfSaoKeBtn');
             if (pdfBtnForQR) {
                 pdfBtnForQR.classList.remove('hidden');
-                pdfBtnForQR.disabled = false;
-                pdfBtnForQR.textContent = 'XUẤT PDF HÓA ĐƠN';
+                pdfBtnForQR.disabled = isHoaDonCuForQR;
+                pdfBtnForQR.textContent = isHoaDonCuForQR
+                    ? 'HÓA ĐƠN CŨ - KHÔNG XUẤT PDF'
+                    : 'XUẤT PDF HÓA ĐƠN';
             }
         }
 
@@ -3364,45 +3376,72 @@ function calculatePaymentsAndText() {
         // QR phải đúng số tiền thực tế đang được phân bổ vào HP1-HP10.
         const amount = Math.round(qrAmount);
 
-        // URL tương đương công thức IMAGE/VietQR hiện tại trên Sheet.
-        const qrUrl =
-            'https://img.vietqr.io/image/' +
-            encodeURIComponent(VIETQR_BANK) + '-' +
-            encodeURIComponent(VIETQR_ACCOUNT) +
-            '-compact2.png?amount=' +
-            encodeURIComponent(amount) +
-            '&addInfo=' + encodeURIComponent(addInfo) +
-            '&accountName=' + encodeURIComponent(VIETQR_ACCOUNT_NAME);
-
+        // Hiển thị khu vực QR ngay với trạng thái loading trong lúc chờ
+        // lấy thông tin tài khoản từ server (thay vì build URL ngay bằng
+        // hằng số hard-code như trước).
         qrSection.classList.remove('hidden');
         qrEmptyState.classList.add('hidden');
         qrLoading.classList.remove('hidden');
         qrImage.classList.add('hidden');
         qrInfo.classList.add('hidden');
-        qrImage.dataset.qrUrl = qrUrl;
+        qrImage.dataset.qrUrl = '';
         if (generateBtn) generateBtn.disabled = true;
-
-        qrImage.onload = function () {
-            qrLoading.classList.add('hidden');
-            qrImage.classList.remove('hidden');
-            qrInfo.textContent = formatCurrency(amount) + ' VNĐ • ' + addInfo;
-            qrInfo.classList.remove('hidden');
-            if (generateBtn) generateBtn.disabled = false;
-        };
-
-        qrImage.onerror = function () {
-            qrLoading.classList.add('hidden');
-            qrImage.classList.add('hidden');
-            qrEmptyState.textContent = 'Không thể tải QR Code. Vui lòng thử lại.';
-            qrEmptyState.classList.remove('hidden');
-            if (generateBtn) generateBtn.disabled = false;
-            /* QR load error: giữ trạng thái QR trống, không hiện popup lỗi. */
-        };
-
-        qrImage.src = qrUrl;
-
-        // Hiển thị khu vực QR ngay lập tức.
         qrSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        // Tài khoản nhận tiền đọc ĐỘNG từ sheet "DS TK" theo Phân loại
+        // (VCB -> G2:G4, TE -> F2:F4, còn lại -> B6:B8 - xem layTaiKhoanQR
+        // trong Code.gs). KHÔNG fallback về giá trị cũ nếu lỗi, để tránh
+        // xuất nhầm QR sang tài khoản không còn dùng.
+        ecorpApi('layTaiKhoanQR', {
+                phanLoai: phanLoaiValueForQR,
+                sessionToken: getEcorpSessionToken()
+            })
+            .then(function (accResult) {
+                if (!accResult || accResult.status !== 'SUCCESS' || !accResult.account) {
+                    throw new Error((accResult && accResult.message) || 'Không lấy được thông tin tài khoản.');
+                }
+
+                // URL tương đương công thức IMAGE/VietQR hiện tại trên Sheet.
+                const qrUrl =
+                    'https://img.vietqr.io/image/' +
+                    encodeURIComponent(accResult.bank) + '-' +
+                    encodeURIComponent(accResult.account) +
+                    '-compact2.png?amount=' +
+                    encodeURIComponent(amount) +
+                    '&addInfo=' + encodeURIComponent(addInfo) +
+                    '&accountName=' + encodeURIComponent(accResult.accountName);
+
+                qrImage.dataset.qrUrl = qrUrl;
+
+                qrImage.onload = function () {
+                    qrLoading.classList.add('hidden');
+                    qrImage.classList.remove('hidden');
+                    qrInfo.textContent = formatCurrency(amount) + ' VNĐ • ' + addInfo;
+                    qrInfo.classList.remove('hidden');
+                    if (generateBtn) generateBtn.disabled = false;
+                };
+
+                qrImage.onerror = function () {
+                    qrLoading.classList.add('hidden');
+                    qrImage.classList.add('hidden');
+                    qrEmptyState.textContent = 'Không thể tải QR Code. Vui lòng thử lại.';
+                    qrEmptyState.classList.remove('hidden');
+                    if (generateBtn) generateBtn.disabled = false;
+                    /* QR load error: giữ trạng thái QR trống, không hiện popup lỗi. */
+                };
+
+                qrImage.src = qrUrl;
+            })
+            .catch(function (error) {
+                // Lỗi lấy tài khoản (mất mạng, sheet DS TK đổi cấu trúc...):
+                // báo lỗi rõ ràng và DỪNG, không tạo QR bằng tài khoản cũ.
+                qrLoading.classList.add('hidden');
+                qrImage.classList.add('hidden');
+                qrInfo.classList.add('hidden');
+                qrEmptyState.textContent = 'Lỗi lấy tài khoản: ' + ecorpApiErrorText(error);
+                qrEmptyState.classList.remove('hidden');
+                if (generateBtn) generateBtn.disabled = false;
+            });
     }
 
     function openQrImage() {
