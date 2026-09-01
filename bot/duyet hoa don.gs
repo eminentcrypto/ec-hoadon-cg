@@ -82,7 +82,7 @@ const TELEGRAM_CHAT_ID =
  * Property: TELEGRAM_BOT_TOKEN
  */
 const TELEGRAM_TOKEN =
-  "8083618334:AAEmhYz34VMfTKTdP48vnRIqr4BzyDi14S4";
+  "8083618334:AAHjmHB5gnnTkz5blzS3k6yxSEwDqZQ_5sY";
 
 
 const ALLOWED_POSITIONS = ["quản lý kd", "lễ tân"];
