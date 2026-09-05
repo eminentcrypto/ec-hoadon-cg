@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * ECORP - DUYỆT THU HỌC PHÍ QUA TELEGRAM
+ * ECORP - DUYỆT THU HỌC PHÍ QUA TELEGRAM (ĐÃ TỐI ƯU TỐC ĐỘ)
  * ============================================================
  *
  * SHEET HOA DON
@@ -29,16 +29,16 @@
  * - Lễ tân
  *
  *
- * THAY ĐỔI SO VỚI BẢN CŨ:
- * - Nút DUYỆT/KHÔNG DUYỆT không còn mở link web (url) — vì người
- *   duyệt không có quyền truy cập Sheet và dùng Gmail thường nên
- *   Session.getActiveUser() không lấy được email đáng tin cậy.
- * - Nút giờ dùng callback_data, xử lý ngay trong Telegram qua
- *   doPost (webhook). Xác thực bằng Telegram User ID (from.id),
- *   không cần quyền Sheet của người bấm — script luôn chạy bằng
- *   quyền Owner (Execute as Me).
- * - Sau khi duyệt: xóa message gốc, gửi message mới thông báo
- *   "X đã duyệt cho KH Y".
+ * THAY ĐỔI TỐI ƯU TỐC ĐỘ SO VỚI BẢN CŨ:
+ * - openById() thay openByUrl() (khỏi parse URL mỗi lần).
+ * - Chỉ mở Spreadsheet 1 lần / request trong doPost (trước đây
+ *   findEmployeeByTelegramId_ tự mở riêng → 2 lần).
+ * - Gộp các cột liền kề (CL+CM, CM+CN+CO+CP) thành 1 lệnh
+ *   setValues() thay vì nhiều setValue() rời rạc.
+ * - Đọc 1 dòng đích 1 lần (A→CP) thay vì đọc CM và G riêng.
+ * - Dùng TextFinder để tìm mã hóa đơn thay vì loop JS toàn cột.
+ * - Dùng editMessageText thay cho deleteMessage + sendMessage
+ *   (giảm 1 lệnh gọi Telegram API mỗi lượt duyệt).
  * - Cần chạy setupTelegramWebhook() 1 lần sau khi deploy.
  * ============================================================
  */
@@ -54,8 +54,9 @@ function checkWebhook() {
   const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
   Logger.log(response.getContentText());
 }
-const SPREADSHEET_URL =
-  "https://docs.google.com/spreadsheets/d/1_atkI0HBXVT_wOWEEplc_q4L5dj2AGCHjf6XKOH3Ygs/edit?gid=646503498";
+
+// Dùng ID trực tiếp thay vì URL đầy đủ → openById() nhanh hơn openByUrl().
+const SPREADSHEET_ID = "1_atkI0HBXVT_wOWEEplc_q4L5dj2AGCHjf6XKOH3Ygs";
 
 const SHEET_HOADON = "HOA DON";
 const SHEET_DSNS = "DSNS";
@@ -182,7 +183,7 @@ function scanAndSendRequests() {
 
   try {
 
-    const ss = SpreadsheetApp.openByUrl(SPREADSHEET_URL);
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(SHEET_HOADON);
 
     if (!sheet) {
@@ -217,11 +218,11 @@ function scanAndSendRequests() {
        * H không phải "Cơ sở", A trống, CM trống
        */
       if (phanLoai === "" || phanLoai === "Cơ sở") continue;
-if (daThu !== "") continue;
+      if (daThu !== "") continue;
 
-if (trangThai !== "" && trangThai !== "CHỜ DUYỆT") {
-  continue;
-}
+      if (trangThai !== "" && trangThai !== "CHỜ DUYỆT") {
+        continue;
+      }
 
       const hoTen = clean_(row[COL.G - 1]);
       const soDienThoai = clean_(row[COL.F - 1]);
@@ -288,8 +289,9 @@ if (trangThai !== "" && trangThai !== "CHỜ DUYỆT") {
 
         const messageId = result.result.message_id;
 
-        sheet.getRange(rowNumber, COL.CL).setValue(messageId);   // Telegram Message ID
-        sheet.getRange(rowNumber, COL.CM).setValue("ĐÃ GỬI");
+        // Gộp CL (Telegram Message ID) + CM (Trạng thái) — 2 cột liền
+        // kề (90-91) — thành 1 lệnh setValues thay vì 2 setValue.
+        sheet.getRange(rowNumber, COL.CL, 1, 2).setValues([[messageId, "ĐÃ GỬI"]]);
 
         Logger.log("Đã gửi HOA DON dòng " + rowNumber + " - Message ID: " + messageId);
 
@@ -298,7 +300,7 @@ if (trangThai !== "" && trangThai !== "CHỜ DUYỆT") {
         Logger.log("Telegram gửi thất bại dòng " + rowNumber + ": " + JSON.stringify(result));
       }
 
-      // Nghỉ nhẹ giữa các message.
+      // Nghỉ nhẹ giữa các message (giới hạn tốc độ của Telegram, ~1 tin/giây/nhóm).
       Utilities.sleep(150);
     }
 
@@ -428,11 +430,20 @@ function doPost(e) {
     }
 
     /* --------------------------------------------------------
+     * MỞ SHEET 1 LẦN DUY NHẤT CHO CẢ REQUEST
+     * (trước đây findEmployeeByTelegramId_ tự mở riêng → 2 lần
+     * openByUrl/openById mỗi lượt duyệt, nay chỉ còn 1 lần)
+     * --------------------------------------------------------
+     */
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    /* --------------------------------------------------------
      * XÁC THỰC NGƯỜI BẤM QUA TELEGRAM USER ID (không qua email)
      * --------------------------------------------------------
      */
 
-    const employee = findEmployeeByTelegramId_(fromId);
+    const employee = findEmployeeByTelegramId_(ss, fromId);
 
     if (!employee) {
       answerCallbackQuery_(callbackQueryId, "Tài khoản Telegram của bạn chưa được đăng ký trong DSNS.", true);
@@ -446,13 +457,6 @@ function doPost(e) {
       return ContentService.createTextOutput("ok");
     }
 
-    /* --------------------------------------------------------
-     * MỞ SHEET (chạy bằng quyền Owner script — không phụ thuộc
-     * quyền Sheet của người bấm)
-     * --------------------------------------------------------
-     */
-
-    const ss = SpreadsheetApp.openByUrl(SPREADSHEET_URL);
     const sheet = ss.getSheetByName(SHEET_HOADON);
 
     if (!sheet) {
@@ -466,23 +470,32 @@ function doPost(e) {
       return ContentService.createTextOutput("ok");
     }
 
-    const ckValues = sheet.getRange(2, COL.CK, lastRow - 1, 1).getValues();
+    /* --------------------------------------------------------
+     * TÌM DÒNG THEO MÃ HÓA ĐƠN BẰNG TextFinder
+     * (chạy phía server Sheets, nhanh hơn tải cả cột về loop JS)
+     * --------------------------------------------------------
+     */
 
-    let targetRow = -1;
+    const finder = sheet.getRange(2, COL.CK, lastRow - 1, 1)
+      .createTextFinder(maHoaDon)
+      .matchEntireCell(true)
+      .findNext();
 
-    for (let i = 0; i < ckValues.length; i++) {
-      if (clean_(ckValues[i][0]) === maHoaDon) {
-        targetRow = i + 2;
-        break;
-      }
-    }
+    const targetRow = finder ? finder.getRow() : -1;
 
     if (targetRow === -1) {
       answerCallbackQuery_(callbackQueryId, "Không tìm thấy hóa đơn: " + maHoaDon, true);
       return ContentService.createTextOutput("ok");
     }
 
-    const currentStatus = clean_(sheet.getRange(targetRow, COL.CM).getValue());
+    /* --------------------------------------------------------
+     * ĐỌC CẢ DÒNG ĐÍCH 1 LẦN (thay vì đọc CM và G riêng biệt)
+     * --------------------------------------------------------
+     */
+
+    const rowData = sheet.getRange(targetRow, 1, 1, COL.CP).getValues()[0];
+    const currentStatus = clean_(rowData[COL.CM - 1]);
+    const hoTen = clean_(rowData[COL.G - 1]);
 
     // Đã xử lý rồi thì không xử lý lại (tránh 2 người bấm cùng lúc).
     if (currentStatus === "DUYỆT" || currentStatus === "KHÔNG DUYỆT") {
@@ -490,27 +503,26 @@ function doPost(e) {
       return ContentService.createTextOutput("ok");
     }
 
-    // Tên khách hàng — dùng để soạn message thông báo mới.
-    const hoTen = clean_(sheet.getRange(targetRow, COL.G).getValue());
-
     const now = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy HH:mm:ss");
     const nguoiDuyet = employee.employeeCode + " - " + employee.name;
 
     /* --------------------------------------------------------
      * GHI KẾT QUẢ VÀO SHEET
-     * (CN không còn ghi — chỉ còn CO làm thông tin người duyệt)
+     * CM, CN, CO, CP liền cột (91-94) → gộp 1 lệnh setValues.
+     * A (Đã thu) không liền kề nên ghi riêng, chỉ khi cần (DUYỆT).
      * --------------------------------------------------------
      */
 
+    sheet.getRange(targetRow, COL.CM, 1, 4).setValues([[
+      action === "DUYET" ? "DUYỆT" : "KHÔNG DUYỆT",
+      "",              // CN không còn dùng
+      nguoiDuyet,      // CO
+      now              // CP
+    ]]);
+
     if (action === "DUYET") {
       sheet.getRange(targetRow, COL.A).setValue("Đã thu");
-      sheet.getRange(targetRow, COL.CM).setValue("DUYỆT");
-    } else {
-      sheet.getRange(targetRow, COL.CM).setValue("KHÔNG DUYỆT");
     }
-
-    sheet.getRange(targetRow, COL.CO).setValue(nguoiDuyet);
-    sheet.getRange(targetRow, COL.CP).setValue(now);
 
     /* --------------------------------------------------------
      * PHẢN HỒI TOAST NGAY TRONG TELEGRAM
@@ -524,11 +536,12 @@ function doPost(e) {
     );
 
     /* --------------------------------------------------------
-     * XÓA MESSAGE GỐC + GỬI MESSAGE MỚI THÔNG BÁO KẾT QUẢ
+     * SỬA MESSAGE GỐC THÀNH THÔNG BÁO KẾT QUẢ (editMessageText)
+     * Thay cho deleteMessage + sendMessage — giảm 1 lệnh gọi
+     * Telegram API mỗi lượt duyệt. Không truyền reply_markup
+     * → nút DUYỆT/KHÔNG DUYỆT tự động biến mất.
      * --------------------------------------------------------
      */
-
-    deleteTelegramMessage_(messageId);
 
     const resultText =
       (action === "DUYET" ? "✅ " : "❌ ") +
@@ -536,7 +549,7 @@ function doPost(e) {
       (action === "DUYET" ? " đã DUYỆT" : " đã KHÔNG DUYỆT") +
       " cho KH <b>" + escapeHtml_(hoTen) + "</b>";
 
-    sendTelegramMessage_(resultText, null);
+    editTelegramMessage_(messageId, resultText);
 
     return ContentService.createTextOutput("ok");
 
@@ -555,11 +568,13 @@ function doPost(e) {
 /* ============================================================
  * 9. TÌM NHÂN SỰ TRONG DSNS THEO TELEGRAM USER ID (cột E)
  * ============================================================
+ * Nhận "ss" (Spreadsheet đã mở sẵn) từ nơi gọi để tránh mở lại
+ * spreadsheet nhiều lần trong cùng 1 request.
+ * ============================================================
  */
 
-function findEmployeeByTelegramId_(telegramId) {
+function findEmployeeByTelegramId_(ss, telegramId) {
 
-  const ss = SpreadsheetApp.openByUrl(SPREADSHEET_URL);
   const sheet = ss.getSheetByName(SHEET_DSNS);
 
   if (!sheet) {
@@ -672,18 +687,25 @@ function answerCallbackQuery_(callbackQueryId, text, showAlert) {
 
 
 /* ============================================================
- * 12. XÓA TELEGRAM MESSAGE
+ * 12. SỬA NỘI DUNG TELEGRAM MESSAGE (thay cho xóa + gửi mới)
+ * ============================================================
+ * Dùng editMessageText để cập nhật message gốc thành thông báo
+ * kết quả duyệt — chỉ 1 lệnh gọi Telegram API thay vì 2
+ * (deleteMessage + sendMessage). Không truyền reply_markup nên
+ * nút bấm DUYỆT/KHÔNG DUYỆT tự động bị gỡ khỏi message.
  * ============================================================
  */
 
-function deleteTelegramMessage_(messageId) {
+function editTelegramMessage_(messageId, newText) {
 
   const token = getTelegramToken_();
-  const url = "https://api.telegram.org/bot" + token + "/deleteMessage";
+  const url = "https://api.telegram.org/bot" + token + "/editMessageText";
 
   const payload = {
     chat_id: TELEGRAM_CHAT_ID,
-    message_id: Number(messageId)
+    message_id: Number(messageId),
+    text: newText,
+    parse_mode: "HTML"
   };
 
   const response = UrlFetchApp.fetch(url, {
@@ -693,7 +715,7 @@ function deleteTelegramMessage_(messageId) {
     muteHttpExceptions: true
   });
 
-  Logger.log("Delete Telegram message: " + response.getContentText());
+  Logger.log("Edit Telegram message: " + response.getContentText());
 }
 
 
