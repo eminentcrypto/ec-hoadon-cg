@@ -1700,6 +1700,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
 <style>
 .reissue-export-pdf-btn {
   margin-left: 8px;
+  color: #0c4fb3;
   padding: 6px 10px;
   border: 0;
   border-radius: 6px;
@@ -3913,6 +3914,13 @@ function calculatePaymentsAndText() {
 
     async function taoPdfHoaDonCu(rowId, maHoaDon, btn, invoiceCell) {
         if (!rowId || !maHoaDon) return;
+
+        const chucVu = String((window.ecorpSession && window.ecorpSession.chucVu) || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        if (chucVu !== 'quản lý kd') {
+            alert('Chỉ Quản lý KD mới được phép xuất PDF bổ sung cho hóa đơn cũ.');
+            return;
+        }
+
         if (btn) {
             btn.disabled = true;
             btn.textContent = 'ĐANG XUẤT...';
@@ -3922,6 +3930,7 @@ function calculatePaymentsAndText() {
             const result = await ecorpApi('taoPdfSaoKe', {
                 rowId: Number(rowId),
                 maHoaDon: String(maHoaDon),
+                reissue: true,
                 sessionToken: getEcorpSessionToken()
             });
 
