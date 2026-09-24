@@ -1696,6 +1696,18 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
 }
 </style>
 
+
+<style>
+.reissue-export-pdf-btn {
+  margin-left: 8px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.reissue-export-pdf-btn:disabled { opacity: .6; cursor: wait; }
+</style>
 </head>
 <body class="ecorp-auth-pending">
 
@@ -1784,7 +1796,7 @@ min-width:150px;height:58px;padding:9px 14px;border:1px solid rgba(255,255,255,.
             setEcorpLoginStatus('Đang xác thực tài khoản...', true);
 
             google.accounts.id.initialize({
-                client_id: '221084661808-ucuarkm93ggdbp3glfvc9nu1uje7cqpc.apps.googleusercontent.com',
+                client_id: '907830153908-gm56sbokjqb7nct3mnr0oriet7cbli6b.apps.googleusercontent.com',
                 callback: handleEcorpCredentialResponse,
                 auto_select: true,
                 cancel_on_tap_outside: false
@@ -3865,9 +3877,28 @@ function calculatePaymentsAndText() {
                 a.appendChild(icon);
                 invoice.appendChild(a);
             } else {
-                invoice.textContent = maHD || '—';
                 invoice.classList.add('reissue-pdf-missing');
-                invoice.title = 'Không tìm thấy file PDF tương ứng trong thư mục hóa đơn';
+                invoice.title = 'Đã thu nhưng chưa có file PDF — có thể xuất lại đúng hóa đơn này';
+
+                if (maHD && item && item.rowId) {
+                    invoice.textContent = '';
+                    const label = document.createElement('span');
+                    label.textContent = maHD + ' ';
+
+                    const exportBtn = document.createElement('button');
+                    exportBtn.type = 'button';
+                    exportBtn.className = 'reissue-export-pdf-btn';
+                    exportBtn.textContent = 'XUẤT PDF';
+                    exportBtn.title = 'Xuất lại đúng hóa đơn ' + maHD;
+                    exportBtn.addEventListener('click', function () {
+                        taoPdfHoaDonCu(item.rowId, maHD, exportBtn, invoice);
+                    });
+
+                    invoice.appendChild(label);
+                    invoice.appendChild(exportBtn);
+                } else {
+                    invoice.textContent = maHD || '—';
+                }
             }
 
             tr.appendChild(stt);
@@ -3878,6 +3909,53 @@ function calculatePaymentsAndText() {
         });
 
         setVisible(tableWrap, true);
+    }
+
+    async function taoPdfHoaDonCu(rowId, maHoaDon, btn, invoiceCell) {
+        if (!rowId || !maHoaDon) return;
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'ĐANG XUẤT...';
+        }
+
+        try {
+            const result = await ecorpApi('taoPdfSaoKe', {
+                rowId: Number(rowId),
+                maHoaDon: String(maHoaDon),
+                sessionToken: getEcorpSessionToken()
+            });
+
+            if (result && result.status === 'SUCCESS' && result.pdfUrl) {
+                if (invoiceCell) {
+                    invoiceCell.classList.remove('reissue-pdf-missing');
+                    invoiceCell.title = 'Mở PDF hóa đơn';
+                    invoiceCell.innerHTML = '';
+                    const a = document.createElement('a');
+                    a.href = result.pdfUrl;
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    a.title = 'Mở PDF hóa đơn';
+                    a.textContent = String(maHoaDon);
+                    const icon = document.createElement('span');
+                    icon.className = 'material-symbols-outlined';
+                    icon.textContent = 'open_in_new';
+                    a.appendChild(icon);
+                    invoiceCell.appendChild(a);
+                }
+            } else {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'XUẤT PDF';
+                }
+                alert((result && result.message) || 'Không tạo được PDF. Vui lòng thử lại.');
+            }
+        } catch (error) {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'XUẤT PDF';
+            }
+            alert('Lỗi hệ thống khi tạo PDF: ' + ecorpApiErrorText(error));
+        }
     }
 
     async function openAndSearch() {
